@@ -1,0 +1,98 @@
+import AppLayout from '@/layouts/AppLayout.vue'
+
+export const routes = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: () => import('@/views/login/LoginView.vue'),
+    meta: { public: true, title: '登录' },
+  },
+  {
+    path: '/',
+    component: AppLayout,
+    redirect: '/dashboard',
+    children: [
+      {
+        path: 'dashboard',
+        name: 'Dashboard',
+        component: () => import('@/views/dashboard/DashboardView.vue'),
+        meta: { title: '工作台', breadcrumb: ['工作台'] },
+      },
+
+      /* ---------------- 基础数据 ---------------- */
+      {
+        path: 'basedata/warehouses',
+        name: 'WarehouseList',
+        component: () => import('@/views/basedata/WarehouseView.vue'),
+        meta: { title: '仓库管理', breadcrumb: ['基础数据', '仓库管理'] },
+      },
+      {
+        path: 'basedata/zones',
+        name: 'ZoneList',
+        component: () => import('@/views/basedata/ZoneView.vue'),
+        meta: { title: '库区管理', breadcrumb: ['基础数据', '库区管理'] },
+      },
+      {
+        path: 'basedata/locations',
+        name: 'LocationList',
+        component: () => import('@/views/basedata/LocationView.vue'),
+        meta: { title: '库位管理', breadcrumb: ['基础数据', '库位管理'] },
+      },
+      {
+        path: 'basedata/products',
+        name: 'ProductList',
+        component: () => import('@/views/basedata/ProductView.vue'),
+        meta: { title: '商品管理', breadcrumb: ['基础数据', '商品管理'] },
+      },
+
+      /* ---------------- 入库 ---------------- */
+      {
+        path: 'inbound/orders',
+        name: 'InboundOrderList',
+        component: () => import('@/views/inbound/InboundOrderList.vue'),
+        meta: { title: '入库单', breadcrumb: ['入库管理', '入库单'] },
+      },
+      // 注意：create 必须定义在 :id 之前，避免被当成 id
+      {
+        path: 'inbound/orders/create',
+        name: 'InboundOrderCreate',
+        component: () => import('@/views/inbound/InboundOrderCreate.vue'),
+        meta: { title: '新建入库单', breadcrumb: ['入库管理', '入库单', '新建'] },
+      },
+      {
+        path: 'inbound/orders/:id',
+        name: 'InboundOrderDetail',
+        component: () => import('@/views/inbound/InboundOrderDetail.vue'),
+        meta: { title: '入库单详情', breadcrumb: ['入库管理', '入库单', '详情'] },
+      },
+      {
+        path: 'putaway/tasks',
+        name: 'PutawayTaskList',
+        component: () => import('@/views/putaway/PutawayTaskList.vue'),
+        meta: { title: '上架任务', breadcrumb: ['入库管理', '上架任务'] },
+      },
+
+      /* ---------------- 库存 ---------------- */
+      {
+        path: 'inventory/stock',
+        name: 'InventoryList',
+        component: () => import('@/views/inventory/InventoryList.vue'),
+        meta: { title: '库存查询', breadcrumb: ['库存管理', '库存查询'] },
+      },
+      {
+        path: 'inventory/transactions',
+        name: 'TransactionList',
+        component: () => import('@/views/inventory/TransactionList.vue'),
+        meta: { title: '库存流水', breadcrumb: ['库存管理', '库存流水'] },
+      },
+    ],
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/error/NotFoundView.vue'),
+    meta: { public: true, title: '页面不存在' },
+  },
+]
+
+export default routes

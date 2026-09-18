@@ -1,0 +1,141 @@
+/* =============================================================================
+ * 设计令牌（Design Tokens）
+ * 所有颜色 / 圆角 / 阴影 / 尺寸都在这里定义，组件里禁止写死色值。
+ * ========================================================================== */
+:root {
+  /* ---------- 品牌色：仓储蓝 ---------- */
+  --brand-50: #eef3ff;
+  --brand-100: #dde7ff;
+  --brand-200: #bdd0ff;
+  --brand-300: #93b0ff;
+  --brand-400: #6187fb;
+  --brand-500: #3b64f4;
+  --brand-600: #2748d6;
+  --brand-700: #1e37a8;
+  --brand-800: #1b3090;
+  --brand-900: #1a2c72;
+
+  /* ---------- 辅助色：扫描青 ---------- */
+  --accent-300: #7dd3fc;
+  --accent-400: #38bdf8;
+  --accent-500: #0ea5e9;
+  --accent-600: #0284c7;
+
+  /* ---------- 中性色 ---------- */
+  --ink-50: #f7f9fc;
+  --ink-100: #eff2f8;
+  --ink-200: #e0e6f0;
+  --ink-300: #c5cede;
+  --ink-400: #98a4ba;
+  --ink-500: #6b7891;
+  --ink-600: #4b566d;
+  --ink-700: #333d52;
+  --ink-800: #1e2637;
+  --ink-900: #0f1626;
+  --ink-950: #080d18;
+
+  /* ---------- 语义色 ---------- */
+  --success-50: #e9f9f0;
+  --success-500: #12a150;
+  --success-600: #0d8040;
+  --warning-50: #fff6e6;
+  --warning-500: #e08700;
+  --warning-600: #b96e00;
+  --danger-50: #fdeced;
+  --danger-500: #e5484d;
+  --danger-600: #c93338;
+
+  /* ---------- 表面与边框 ---------- */
+  --bg-app: #f4f6fb;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #fafbfe;
+  --bg-surface-3: #f1f4fa;
+  --border-color: #e4e9f2;
+  --border-strong: #cfd7e6;
+  --divider: #eef1f7;
+
+  /* ---------- 文本 ---------- */
+  --text-primary: #101828;
+  --text-regular: #475467;
+  --text-secondary: #667085;
+  --text-placeholder: #98a2b3;
+  --text-inverse: #ffffff;
+
+  /* ---------- 侧边栏（深色定调） ---------- */
+  --sidebar-bg: #0d1524;
+  --sidebar-bg-2: #111c31;
+  --sidebar-text: #97a3bd;
+  --sidebar-text-active: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+
+  /* ---------- 圆角 ---------- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  /* ---------- 阴影 ---------- */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 6px 16px -6px rgba(16, 24, 40, 0.12), 0 2px 6px -2px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 18px 40px -18px rgba(16, 24, 40, 0.28), 0 6px 16px -8px rgba(16, 24, 40, 0.12);
+  --shadow-xl: 0 32px 64px -32px rgba(16, 24, 40, 0.36);
+  --shadow-brand: 0 12px 24px -10px rgba(59, 100, 244, 0.55);
+
+  /* ---------- 尺寸 ---------- */
+  --sidebar-w: 236px;
+  --sidebar-w-collapsed: 68px;
+  --header-h: 60px;
+  --page-pad: 20px;
+
+  /* ---------- 字体 ---------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* ---------- 动效 ---------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 420ms;
+}
+
+/* =============================================================================
+ * 暗色主题
+ * ========================================================================== */
+html.dark {
+  --brand-50: #16203a;
+  --brand-100: #1a2748;
+  --brand-200: #23356b;
+  --brand-300: #3550a8;
+  --brand-400: #5878e0;
+  --brand-500: #6f8ef7;
+  --brand-600: #8aa4ff;
+
+  --bg-app: #080d18;
+  --bg-surface: #111a2b;
+  --bg-surface-2: #0e1726;
+  --bg-surface-3: #162034;
+  --border-color: #22304a;
+  --border-strong: #2e3f5e;
+  --divider: #1b273c;
+
+  --text-primary: #eaf0fb;
+  --text-regular: #b9c6dd;
+  --text-secondary: #8e9db8;
+  --text-placeholder: #64748b;
+
+  --sidebar-bg: #0a1120;
+  --sidebar-bg-2: #0d1728;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 8px 20px -8px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 20px 44px -20px rgba(0, 0, 0, 0.7);
+  --shadow-xl: 0 36px 70px -36px rgba(0, 0, 0, 0.8);
+
+  color-scheme: dark;
+}
