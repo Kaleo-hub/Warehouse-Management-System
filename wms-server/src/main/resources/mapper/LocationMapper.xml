@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.basedata.mapper.LocationMapper">
+
+    <!--
+      容量校验和占用增加合并成一条 SQL：
+        条件不满足 → 影响行数 0 → 上层抛 30009 库位容量不足
+      这样即使两个上架任务并发打到同一个库位，也不会都通过检查后一起超容。
+    -->
+    <update id="increaseUsedCapacity">
+        UPDATE location
+        SET used_capacity = used_capacity + #{qty}
+        WHERE id = #{id}
+          AND deleted = 0
+          AND (capacity = 0 OR used_capacity + #{qty} &lt;= capacity)
+    </update>
+
+</mapper>
