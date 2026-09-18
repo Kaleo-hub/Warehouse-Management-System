@@ -13,6 +13,8 @@ public enum CommonErrorCode implements ErrorCode {
     OPTIMISTIC_LOCK_CONFLICT(10006, "数据已被他人修改，请重试"),
     IDEMPOTENT_CONFLICT(10007, "重复请求，请勿重复提交"),
     OPERATION_FORBIDDEN(10008, "当前状态不允许该操作"),
+    /** 发号器异常。放通用码而不是业务码 —— 发号器是基础设施，不该依赖任何业务模块 */
+    SEQUENCE_GENERATE_FAILED(10009, "单号生成失败，请重试"),
     /** 基础数据模块错误码（3xxxx 段，见开发规范 4.3），模块错误码多了再拆独立枚举 */
     RELATED_DATA_EXISTS(30012, "存在关联数据，无法删除"),
     /** 上架时库位已用容量会超过上限，对应 BR-006 */

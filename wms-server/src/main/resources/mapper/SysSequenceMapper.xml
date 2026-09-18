@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.common.sequence.mapper.SysSequenceMapper">
+
+    <!--
+      这一句是整个发号器的核心：
+        - 第一次调用（当天第一次）→ 插入一行，current_value = 1
+        - 之后每次调用 → 唯一键冲突，走 UPDATE 分支，current_value 加 1
+      InnoDB 会在这一行上加排他锁，并发的第二个请求会排队等第一个提交，
+      所以绝不会两个请求拿到同一个序号。
+    -->
+    <insert id="nextValue">
+        INSERT INTO sys_sequence (biz_type, biz_date, current_value)
+        VALUES (#{bizType}, #{bizDate}, 1)
+        ON DUPLICATE KEY UPDATE current_value = current_value + 1
+    </insert>
+
+    <select id="selectCurrentValue" resultType="java.lang.Long">
+        SELECT current_value
+        FROM sys_sequence
+        WHERE biz_type = #{bizType}
+          AND biz_date = #{bizDate}
+    </select>
+
+</mapper>
