@@ -4,7 +4,7 @@ spring:
 
 # 数据库配置
   datasource:
-    url: jdbc:mysql://localhost:3306/wms?useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/wms?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -19,9 +19,24 @@ mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
     db-config:
       logic-delete-field: deleted     # 实体里代表逻辑删除的字段名
       logic-delete-value: 1
       logic-not-delete-value: 0
+
+# JWT 配置
+wms:
+  jwt:
+    secret: ${JWT_SECRET:wms-local-dev-secret-key-change-me-before-production-2026}
+    expire-minutes: 120
+
+# 日志配置
+logging:
+  level:
+    # SQL 日志由 MyBatis 通过 slf4j 输出，级别是 DEBUG，打开 mapper 包才能看到
+    com.myproject.wmsserver.system.mapper: DEBUG
+  pattern:
+    # %X{traceId} 取自 MDC，由 TraceIdFilter 在请求入口写入，用于串联同一次请求的所有日志
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{50} - %msg%n"
