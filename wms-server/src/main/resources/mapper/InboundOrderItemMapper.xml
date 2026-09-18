@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.inbound.mapper.InboundOrderItemMapper">
+
+    <select id="selectByOrderId" resultType="com.myproject.wmsserver.inbound.entity.InboundOrderItem">
+        SELECT id, order_id, sku_id, sku_code, sku_name,
+               expect_qty, received_qty, putaway_qty,
+               batch_no, production_date, expiry_date, remark,
+               deleted, create_time, update_time, create_by, update_by
+        FROM inbound_order_item
+        WHERE order_id = #{orderId}
+          AND deleted = 0
+        ORDER BY id ASC
+    </select>
+
+    <!--
+      实收数量用累加：received_qty = received_qty + #{receivedQty}
+      —— 支持分批到货，收一次加一次。
+      批号/日期按传入值覆盖，传 null 时用 COALESCE 保留原值，
+      避免「第二次收货没填批次」把第一次登记的批次冲掉。
+    -->
+    <update id="receiveItem">
+        UPDATE inbound_order_item
+        SET received_qty    = received_qty + #{receivedQty},
+            batch_no        = COALESCE(#{batchNo}, batch_no),
+            production_date = COALESCE(#{productionDate}, production_date),
+            expiry_date     = COALESCE(#{expiryDate}, expiry_date)
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <update id="increasePutawayQty">
+        UPDATE inbound_order_item
+        SET putaway_qty = putaway_qty + #{qty}
+        WHERE id = #{id}
+          AND deleted = 0
+          AND putaway_qty + #{qty} &lt;= received_qty
+    </update>
+
+</mapper>

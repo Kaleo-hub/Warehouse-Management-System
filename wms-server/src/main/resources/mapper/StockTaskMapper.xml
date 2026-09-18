@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.task.mapper.StockTaskMapper">
+
+    <select id="selectTaskPage" resultType="com.myproject.wmsserver.task.vo.StockTaskVO">
+        SELECT t.id, t.task_no, t.task_type, t.status,
+               t.warehouse_id, w.name AS warehouse_name,
+               t.sku_id, p.sku_code, p.name AS sku_name, t.batch_no,
+               t.from_location_id, fl.code AS from_location_code,
+               t.to_location_id, tl.code AS to_location_code,
+               t.plan_qty, t.actual_qty,
+               t.assignee_id, t.assignee_name,
+               t.source_type, t.source_id, t.source_no, t.priority,
+               t.create_time, t.start_time, t.finish_time, t.remark
+        FROM stock_task t
+                 LEFT JOIN warehouse w ON w.id = t.warehouse_id AND w.deleted = 0
+                 LEFT JOIN location fl ON fl.id = t.from_location_id
+                 LEFT JOIN location tl ON tl.id = t.to_location_id
+                 LEFT JOIN product p ON p.id = t.sku_id
+        WHERE t.deleted = 0
+        <if test="query.keyword != null and query.keyword != ''">
+            AND (t.task_no LIKE CONCAT('%', #{query.keyword}, '%')
+                 OR p.sku_code LIKE CONCAT('%', #{query.keyword}, '%')
+                 OR p.name LIKE CONCAT('%', #{query.keyword}, '%'))
+        </if>
+        <if test="query.taskType != null and query.taskType != ''">
+            AND t.task_type = #{query.taskType}
+        </if>
+        <if test="query.status != null and query.status != ''">
+            AND t.status = #{query.status}
+        </if>
+        <if test="query.warehouseId != null">
+            AND t.warehouse_id = #{query.warehouseId}
+        </if>
+        <if test="query.assigneeId != null">
+            AND t.assignee_id = #{query.assigneeId}
+        </if>
+        <if test="query.sourceNo != null and query.sourceNo != ''">
+            AND t.source_no = #{query.sourceNo}
+        </if>
+        <if test="query.beginTime != null">
+            AND t.create_time &gt;= #{query.beginTime}
+        </if>
+        <if test="query.endTime != null">
+            AND t.create_time &lt; DATE_ADD(#{query.endTime}, INTERVAL 1 DAY)
+        </if>
+        <!-- 未完成的任务排在前面：作业员最关心的是"还有什么要干" -->
+        ORDER BY (t.status IN ('DONE', 'CANCELLED', 'TIMEOUT')) ASC, t.id DESC
+    </select>
+
+    <select id="selectTaskDetail" resultType="com.myproject.wmsserver.task.vo.StockTaskVO">
+        SELECT t.id, t.task_no, t.task_type, t.status,
+               t.warehouse_id, w.name AS warehouse_name,
+               t.sku_id, p.sku_code, p.name AS sku_name, t.batch_no,
+               t.from_location_id, fl.code AS from_location_code,
+               t.to_location_id, tl.code AS to_location_code,
+               t.plan_qty, t.actual_qty,
+               t.assignee_id, t.assignee_name,
+               t.source_type, t.source_id, t.source_no, t.priority,
+               t.create_time, t.start_time, t.finish_time, t.remark
+        FROM stock_task t
+                 LEFT JOIN warehouse w ON w.id = t.warehouse_id AND w.deleted = 0
+                 LEFT JOIN location fl ON fl.id = t.from_location_id
+                 LEFT JOIN location tl ON tl.id = t.to_location_id
+                 LEFT JOIN product p ON p.id = t.sku_id
+        WHERE t.id = #{id}
+          AND t.deleted = 0
+    </select>
+
+    <!--
+      库位推荐规则（优先级从高到低）：
+        1. 已经有这个 SKU 的库位优先 —— 同 SKU 集中存放，拣货少走路，也不会把库存拆散
+        2. 已用容量占比低的优先 —— 均衡各库位负载
+        3. id 升序兜底 —— 保证结果稳定，同一批任务不会每次推荐不同的库位
+      capacity = 0 表示不限容量，排序时给一个很大的值让它排最后。
+    -->
+    <select id="selectRecommendedPutawayLocationId" resultType="java.lang.Long">
+        SELECT l.id
+        FROM location l
+                 LEFT JOIN inventory i
+                           ON i.location_id = l.id
+                               AND i.sku_id = #{skuId}
+                               AND i.deleted = 0
+                               AND i.qty &gt; 0
+        WHERE l.warehouse_id = #{warehouseId}
+          AND l.deleted = 0
+          AND l.status = 'ENABLED'
+          AND l.location_type = 'RACK'
+        GROUP BY l.id, l.capacity, l.used_capacity
+        ORDER BY MAX(CASE WHEN i.id IS NOT NULL THEN 1 ELSE 0 END) DESC,
+                 CASE WHEN l.capacity = 0 THEN 999999 ELSE l.used_capacity / l.capacity END ASC,
+                 l.id ASC
+        LIMIT 1
+    </select>
+
+    <select id="selectTempLocationId" resultType="java.lang.Long">
+        SELECT l.id
+        FROM location l
+        WHERE l.warehouse_id = #{warehouseId}
+          AND l.deleted = 0
+          AND l.location_type = 'TEMP'
+        ORDER BY l.id ASC
+        LIMIT 1
+    </select>
+
+    <update id="assign">
+        UPDATE stock_task
+        SET status        = 'ASSIGNED',
+            assignee_id   = #{assigneeId},
+            assignee_name = #{assigneeName}
+        WHERE id = #{id}
+          AND status = 'CREATED'
+          AND deleted = 0
+    </update>
+
+    <update id="start">
+        UPDATE stock_task
+        SET status     = 'PROCESSING',
+            start_time = NOW(3)
+        WHERE id = #{id}
+          AND status = 'ASSIGNED'
+          AND deleted = 0
+    </update>
+
+    <update id="complete">
+        UPDATE stock_task
+        SET status      = 'DONE',
+            actual_qty  = #{actualQty},
+            finish_time = NOW(3)
+        <if test="remark != null and remark != ''">
+            , remark = #{remark}
+        </if>
+        WHERE id = #{id}
+          AND status = 'PROCESSING'
+          AND deleted = 0
+    </update>
+
+</mapper>

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.inbound.mapper.InboundOrderMapper">
+
+    <!--
+      分页查询。
+      resultType 直接是 VO，依赖 application.yaml 里的 map-underscore-to-camel-case: true
+      把 warehouse_name 自动映射到 warehouseName。
+    -->
+    <select id="selectOrderPage" resultType="com.myproject.wmsserver.inbound.vo.InboundOrderVO">
+        SELECT o.id,
+               o.order_no,
+               o.warehouse_id,
+               w.name AS warehouse_name,
+               o.supplier_name,
+               o.expect_arrive_time,
+               o.status,
+               o.total_expect_qty,
+               o.total_received_qty,
+               o.remark,
+               o.create_time,
+               o.update_time
+        FROM inbound_order o
+                 LEFT JOIN warehouse w ON w.id = o.warehouse_id AND w.deleted = 0
+        WHERE o.deleted = 0
+        <!-- keyword 模糊匹配单号和供应商 -->
+        <if test="query.keyword != null and query.keyword != ''">
+            AND (o.order_no LIKE CONCAT('%', #{query.keyword}, '%')
+                 OR o.supplier_name LIKE CONCAT('%', #{query.keyword}, '%'))
+        </if>
+        <if test="query.warehouseId != null">
+            AND o.warehouse_id = #{query.warehouseId}
+        </if>
+        <if test="query.status != null and query.status != ''">
+            AND o.status = #{query.status}
+        </if>
+        <!-- 前端传的是日期，endTime 要包含当天，所以用 &lt; 次日零点 而不是 &lt;= 当天零点 -->
+        <if test="query.beginTime != null">
+            AND o.create_time &gt;= #{query.beginTime}
+        </if>
+        <if test="query.endTime != null">
+            AND o.create_time &lt; DATE_ADD(#{query.endTime}, INTERVAL 1 DAY)
+        </if>
+        ORDER BY o.id DESC
+    </select>
+
+    <select id="selectOrderDetail" resultType="com.myproject.wmsserver.inbound.vo.InboundOrderVO">
+        SELECT o.id,
+               o.order_no,
+               o.warehouse_id,
+               w.name AS warehouse_name,
+               o.supplier_name,
+               o.expect_arrive_time,
+               o.status,
+               o.total_expect_qty,
+               o.total_received_qty,
+               o.remark,
+               o.create_time,
+               o.update_time
+        FROM inbound_order o
+                 LEFT JOIN warehouse w ON w.id = o.warehouse_id AND w.deleted = 0
+        WHERE o.id = #{id}
+          AND o.deleted = 0
+    </select>
+
+    <!-- 收货前锁单据行。deleted = 0 必须手写，自定义 SQL 不受逻辑删除配置影响 -->
+    <select id="selectForUpdate" resultType="com.myproject.wmsserver.inbound.entity.InboundOrder">
+        SELECT id, order_no, warehouse_id, supplier_name, expect_arrive_time,
+               status, total_expect_qty, total_received_qty, remark,
+               deleted, create_time, update_time, create_by, update_by
+        FROM inbound_order
+        WHERE id = #{id}
+          AND deleted = 0
+        FOR UPDATE
+    </select>
+
+    <!--
+      收货结果回写。
+      这里【没有】做 status CAS，因为调用方已经先 SELECT ... FOR UPDATE 锁住了这一行，
+      别人改不了它 —— 锁本身就是并发控制。
+      （对比 cancel：那个不需要读原始数据，所以一条带 status 条件的 UPDATE 就够，不用显式加锁。）
+    -->
+    <update id="updateReceiveResult">
+        UPDATE inbound_order
+        SET status             = #{status},
+            total_received_qty = #{totalReceivedQty},
+            update_by          = #{updateBy}
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <!-- 纯 status CAS：影响行数 0 说明状态已经不是 CREATED 了 -->
+    <update id="cancel">
+        UPDATE inbound_order
+        SET status    = 'CANCELLED',
+            update_by = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'CREATED'
+          AND deleted = 0
+    </update>
+
+    <!-- 整单上架完成。status = 'RECEIVED' 是 CAS 条件，重复调用影响行数为 0 -->
+    <update id="markPutawayDone">
+        UPDATE inbound_order
+        SET status    = 'PUTAWAY_DONE',
+            update_by = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'RECEIVED'
+          AND deleted = 0
+    </update>
+
+</mapper>
