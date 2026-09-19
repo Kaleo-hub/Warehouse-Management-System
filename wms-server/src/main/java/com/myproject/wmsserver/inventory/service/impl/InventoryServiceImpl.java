@@ -54,15 +54,21 @@ public class InventoryServiceImpl implements InventoryService {
         // 批次号统一成空串：唯一键含这一列，null 会让唯一约束失效
         String batchNo = normalizeBatchNo(command.getBatchNo());
 
-        // ---------- ① 确保库存行存在 ----------
+        // ---------- ① 确保库存行存在（仅入库类变动）----------
         // 不存在就建一条全 0 的；已存在则什么都不改。目的是让下一步能锁到行。
-        inventoryMapper.ensureRow(warehouseId, locationId, skuId, batchNo);
+        // 出库类变动传 createIfAbsent = false：没有库存行说明这个库位本来就没货，
+        // 直接报库存不足，而不是先建一条 0 库存再失败（那样会留下垃圾数据）。
+        if (command.isCreateIfAbsent()) {
+            inventoryMapper.ensureRow(warehouseId, locationId, skuId, batchNo);
+        }
 
         // ---------- ② 锁行，拿当前值 ----------
         Inventory inventory = inventoryMapper.selectForUpdate(locationId, skuId, batchNo);
         if (inventory == null) {
-            // 理论上走不到这里，属于兜底
-            throw new BizException(InventoryErrorCode.STOCK_NOT_FOUND);
+            // createIfAbsent = false 且这一行不存在 → 这个库位根本没有这批货
+            log.warn("库存记录不存在 type={} locationId={} skuId={} batchNo={}",
+                    command.getTxType(), locationId, skuId, batchNo);
+            throw new BizException(InventoryErrorCode.STOCK_NOT_ENOUGH);
         }
 
         int qtyBefore = nz(inventory.getQty());

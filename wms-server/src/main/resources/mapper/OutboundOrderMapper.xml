@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.outbound.mapper.OutboundOrderMapper">
+
+    <select id="selectOrderPage" resultType="com.myproject.wmsserver.outbound.vo.OutboundOrderVO">
+        SELECT o.id, o.order_no, o.warehouse_id, w.name AS warehouse_name,
+               o.customer_name, o.receive_address, o.expect_ship_time,
+               o.status, o.total_qty, o.allocated_qty, o.picked_qty,
+               o.allocate_time, o.remark, o.create_time, o.update_time
+        FROM outbound_order o
+                 LEFT JOIN warehouse w ON w.id = o.warehouse_id AND w.deleted = 0
+        WHERE o.deleted = 0
+        <if test="query.keyword != null and query.keyword != ''">
+            AND (o.order_no LIKE CONCAT('%', #{query.keyword}, '%')
+                 OR o.customer_name LIKE CONCAT('%', #{query.keyword}, '%'))
+        </if>
+        <if test="query.warehouseId != null">
+            AND o.warehouse_id = #{query.warehouseId}
+        </if>
+        <if test="query.status != null and query.status != ''">
+            AND o.status = #{query.status}
+        </if>
+        <if test="query.beginTime != null">
+            AND o.create_time &gt;= #{query.beginTime}
+        </if>
+        <if test="query.endTime != null">
+            AND o.create_time &lt; DATE_ADD(#{query.endTime}, INTERVAL 1 DAY)
+        </if>
+        <!-- 未完成的排前面：待分配的最急 -->
+        ORDER BY (o.status IN ('SHIPPED','CLOSED','CANCELLED')) ASC, o.id DESC
+    </select>
+
+    <select id="selectOrderDetail" resultType="com.myproject.wmsserver.outbound.vo.OutboundOrderVO">
+        SELECT o.id, o.order_no, o.warehouse_id, w.name AS warehouse_name,
+               o.customer_name, o.receive_address, o.expect_ship_time,
+               o.status, o.total_qty, o.allocated_qty, o.picked_qty,
+               o.allocate_time, o.remark, o.create_time, o.update_time
+        FROM outbound_order o
+                 LEFT JOIN warehouse w ON w.id = o.warehouse_id AND w.deleted = 0
+        WHERE o.id = #{id}
+          AND o.deleted = 0
+    </select>
+
+    <!-- 分配前锁单据行。deleted = 0 必须手写，自定义 SQL 不受逻辑删除配置影响 -->
+    <select id="selectForUpdate" resultType="com.myproject.wmsserver.outbound.entity.OutboundOrder">
+        SELECT id, order_no, warehouse_id, customer_name, receive_address, expect_ship_time,
+               status, total_qty, allocated_qty, picked_qty, allocate_time, remark,
+               deleted, create_time, update_time, create_by, update_by
+        FROM outbound_order
+        WHERE id = #{id}
+          AND deleted = 0
+        FOR UPDATE
+    </select>
+
+    <!-- 以下都是 CAS：status 条件就是并发保护，不需要额外加锁 -->
+
+    <update id="markAllocated">
+        UPDATE outbound_order
+        SET status         = 'ALLOCATED',
+            allocated_qty  = #{allocatedQty},
+            allocate_time  = NOW(3),
+            update_by      = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'CREATED'
+          AND deleted = 0
+    </update>
+
+    <update id="markPicking">
+        UPDATE outbound_order
+        SET status    = 'PICKING',
+            update_by = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'ALLOCATED'
+          AND deleted = 0
+    </update>
+
+    <update id="markPicked">
+        UPDATE outbound_order
+        SET status     = 'PICKED',
+            picked_qty = #{pickedQty},
+            update_by  = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'PICKING'
+          AND deleted = 0
+    </update>
+
+    <update id="markShipped">
+        UPDATE outbound_order
+        SET status    = 'SHIPPED',
+            update_by = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'PICKED'
+          AND deleted = 0
+    </update>
+
+    <!-- 释放分配：回到 CREATED，并把已分配数量清零 -->
+    <update id="markReleased">
+        UPDATE outbound_order
+        SET status        = 'CREATED',
+            allocated_qty = 0,
+            allocate_time  = NULL,
+            update_by     = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'ALLOCATED'
+          AND deleted = 0
+    </update>
+
+    <update id="cancel">
+        UPDATE outbound_order
+        SET status    = 'CANCELLED',
+            update_by = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'CREATED'
+          AND deleted = 0
+    </update>
+
+    <!-- 未完成的拣货任务计数：DONE / CANCELLED 之外的状态都算未完成 -->
+    <select id="countUnfinishedPickTask" resultType="int">
+        SELECT COUNT(*)
+        FROM stock_task
+        WHERE source_type = 'OUTBOUND_ORDER'
+          AND source_id = #{orderId}
+          AND task_type = 'PICK'
+          AND deleted = 0
+          AND status NOT IN ('DONE', 'CANCELLED')
+    </select>
+
+</mapper>

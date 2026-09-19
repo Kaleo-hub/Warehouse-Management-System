@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.outbound.mapper.OutboundOrderItemMapper">
+
+    <select id="selectByOrderId" resultType="com.myproject.wmsserver.outbound.entity.OutboundOrderItem">
+        SELECT id, order_id, sku_id, sku_code, sku_name,
+               qty, allocated_qty, picked_qty, remark,
+               deleted, create_time, update_time, create_by, update_by
+        FROM outbound_order_item
+        WHERE order_id = #{orderId}
+          AND deleted = 0
+        ORDER BY id ASC
+    </select>
+
+    <update id="updateAllocatedQty">
+        UPDATE outbound_order_item
+        SET allocated_qty = #{allocatedQty}
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <!-- 拣货数不可能超过分配数，SQL 这一层再兜一次底 -->
+    <update id="increasePickedQty">
+        UPDATE outbound_order_item
+        SET picked_qty = picked_qty + #{qty}
+        WHERE id = #{id}
+          AND deleted = 0
+          AND picked_qty + #{qty} &lt;= allocated_qty
+    </update>
+
+    <update id="resetAllocatedQty">
+        UPDATE outbound_order_item
+        SET allocated_qty = 0
+        WHERE order_id = #{orderId}
+          AND deleted = 0
+    </update>
+
+</mapper>

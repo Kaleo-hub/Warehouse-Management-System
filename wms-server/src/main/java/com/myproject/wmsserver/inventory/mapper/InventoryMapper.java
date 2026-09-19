@@ -6,6 +6,7 @@ import com.myproject.wmsserver.inventory.dto.InventoryQuery;
 import com.myproject.wmsserver.inventory.entity.Inventory;
 import com.myproject.wmsserver.inventory.vo.InventoryVO;
 import org.apache.ibatis.annotations.Param;
+import java.util.List;
 
 public interface InventoryMapper extends BaseMapper<Inventory> {
 
@@ -49,6 +50,19 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
     Inventory selectByBusinessKey(@Param("locationId") Long locationId,
                                   @Param("skuId") Long skuId,
                                   @Param("batchNo") String batchNo);
+
+    /**
+     * 按 FIFO 列出可分配的库存批次（BR-004）。
+     *
+     * 排序：首次入库时间早的优先，其次生产日期早的，最后用 id 兜底保证顺序稳定。
+     * 只返回 available_qty > 0 的行 —— 走 idx_available 索引，不要在这里做函数运算。
+     *
+     * 【注意】这是普通的读，不加锁。
+     * 调用方拿到候选后必须通过 applyChange 去真正锁定，
+     * 那个方法会重新校验可用量并在不满足时抛异常 —— 这样才是安全的。
+     */
+    List<Inventory> selectFifoAvailable(@Param("warehouseId") Long warehouseId,
+                                        @Param("skuId") Long skuId);
 
     /** 库存分页查询，带仓库名 / 库位编码 / 商品编码名称 */
     IPage<InventoryVO> selectInventoryPage(IPage<InventoryVO> page,

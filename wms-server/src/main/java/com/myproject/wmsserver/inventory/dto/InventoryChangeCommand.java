@@ -54,4 +54,15 @@ public class InventoryChangeCommand {
     private String operatorName;
 
     private String remark;
+
+    /**
+     * 库存行不存在时，是否自动创建一条 0 库存的记录。
+     *
+     * true  —— 入库类变动用。第一次上架时这个「库位+SKU+批次」还没库存，
+     *          需要先建行才能加锁（锁不存在的行是无效的）。
+     * false —— 出库类变动必须用。没库存就是没库存，
+     *          不能因为「分配」这个动作凭空建出一条 0 库存记录来。
+     */
+    @Builder.Default
+    private boolean createIfAbsent = true;
 }

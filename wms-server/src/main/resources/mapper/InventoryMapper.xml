@@ -68,6 +68,23 @@
     </update>
 
     <!--
+      FIFO 候选批次。
+      排序严格按 BR-004：优先入库早、其次生产日期早，id 兜底保证顺序稳定
+      （顺序不稳定时并发分配可能死锁）。
+      只取 available_qty > 0，走 idx_available(sku_id, warehouse_id, available_qty) 索引。
+    -->
+    <select id="selectFifoAvailable" resultType="com.myproject.wmsserver.inventory.entity.Inventory">
+        SELECT
+        <include refid="baseColumns"/>
+        FROM inventory
+        WHERE deleted = 0
+          AND warehouse_id = #{warehouseId}
+          AND sku_id = #{skuId}
+          AND available_qty > 0
+        ORDER BY inbound_time ASC, production_date ASC, id ASC
+    </select>
+
+    <!--
       库存分页。
       available_qty 是生成列，直接查出来即可 —— 应用层不要自己算，
       算就可能算错，而这正是 BR-002 最容易出错的地方。

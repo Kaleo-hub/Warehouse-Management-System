@@ -4,7 +4,10 @@ import com.myproject.wmsserver.common.result.PageResult;
 import com.myproject.wmsserver.inventory.dto.InventoryQuery;
 import com.myproject.wmsserver.inventory.dto.TransactionQuery;
 import com.myproject.wmsserver.inventory.vo.InventoryTransactionVO;
+import com.myproject.wmsserver.inventory.entity.Inventory;
 import com.myproject.wmsserver.inventory.vo.InventoryVO;
+
+import java.util.List;
 
 /**
  * 库存查询（只读）。
@@ -22,4 +25,12 @@ public interface InventoryQueryService {
 
     /** 流水分页：keyword 匹配 txNo/skuCode/skuName */
     PageResult<InventoryTransactionVO> pageTransaction(TransactionQuery query);
+
+    /**
+     * 按 FIFO 列出某个仓库某个 SKU 的可分配批次（BR-004）。
+     *
+     * 给出库分配用，不是给 API 输出的 —— 所以直接返回实体，没有再包一层 VO。
+     * 返回结果【没有加锁】，调用方必须通过 InventoryService.applyChange 去真正锁定。
+     */
+    List<Inventory> listFifoAvailable(Long warehouseId, Long skuId);
 }

@@ -19,6 +19,15 @@ public interface StockTaskService {
      */
     int generatePutawayTasks(Long inboundOrderId);
 
+    /**
+     * 按出库单的已锁分配记录生成拣货任务。
+     * 一条分配明细（= 一个库位的一个批次）生成一条任务。
+     * 幂等：已有在途任务不重复生成，返回 10007。
+     *
+     * @return 本次生成的任务数
+     */
+    int generatePickTasks(Long outboundOrderId);
+
     /** 领取任务：CREATED → ASSIGNED。被人抢先返回 70003 */
     void assign(Long taskId);
 
