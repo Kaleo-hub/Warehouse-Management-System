@@ -4,6 +4,8 @@ import CrudTable from '@/components/crud/CrudTable.vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { locationApi, zoneApi } from '@/api/basedata'
 import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
+import { fetchAllOptions } from '@/utils/loadAllOptions'
+import { toastError } from '@/utils/error'
 import {
   LOCATION_TYPE_OPTIONS,
   LOCATION_TYPE_TAG,
@@ -19,9 +21,16 @@ const zones = ref([])
 onMounted(async () => {
   loadWarehouses()
   try {
-    const data = await zoneApi.page({ page: 1, size: 200 })
-    zones.value = data?.records ?? data?.list ?? []
-  } catch {
+    /*
+     * 库区下拉要按仓库过滤，所以这里把全部库区拉回来本地过滤。
+     * 用 fetchAllOptions 分页拉取 —— 之前写的 size: 200 超过了后端上限 100，
+     * 请求直接 10002 失败，而这个 catch 又把错误吞了，
+     * 结果「所属库区」下拉一直是空的，界面上还看不到任何提示。
+     */
+    zones.value = await fetchAllOptions((params) => zoneApi.page(params))
+  } catch (error) {
+    console.error('[locationView] 加载库区列表失败', error)
+    toastError(error, '库区列表加载失败')
     zones.value = []
   }
 })
