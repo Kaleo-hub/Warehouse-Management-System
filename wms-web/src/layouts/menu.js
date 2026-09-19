@@ -49,8 +49,8 @@ export const menuGroups = [
   {
     title: '出库管理',
     items: [
-      { title: '出库单', path: '/outbound/orders', icon: Upload, soon: true },
-      { title: '拣货任务', path: '/picking/tasks', icon: DataLine, soon: true },
+      { title: '出库单', path: '/outbound/orders', icon: Upload },
+      { title: '拣货任务', path: '/picking/tasks', icon: DataLine },
     ],
   },
   {

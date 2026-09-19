@@ -72,6 +72,33 @@ export const routes = [
         meta: { title: '上架任务', breadcrumb: ['入库管理', '上架任务'] },
       },
 
+      /* ---------------- 出库 ---------------- */
+      {
+        path: 'outbound/orders',
+        name: 'OutboundOrderList',
+        component: () => import('@/views/outbound/OutboundOrderList.vue'),
+        meta: { title: '出库单', breadcrumb: ['出库管理', '出库单'] },
+      },
+      // create 必须定义在 :id 之前，避免被当成 id
+      {
+        path: 'outbound/orders/create',
+        name: 'OutboundOrderCreate',
+        component: () => import('@/views/outbound/OutboundOrderCreate.vue'),
+        meta: { title: '新建出库单', breadcrumb: ['出库管理', '出库单', '新建'] },
+      },
+      {
+        path: 'outbound/orders/:id',
+        name: 'OutboundOrderDetail',
+        component: () => import('@/views/outbound/OutboundOrderDetail.vue'),
+        meta: { title: '出库单详情', breadcrumb: ['出库管理', '出库单', '详情'] },
+      },
+      {
+        path: 'picking/tasks',
+        name: 'PickTaskList',
+        component: () => import('@/views/picking/PickTaskList.vue'),
+        meta: { title: '拣货任务', breadcrumb: ['出库管理', '拣货任务'] },
+      },
+
       /* ---------------- 库存 ---------------- */
       {
         path: 'inventory/stock',
