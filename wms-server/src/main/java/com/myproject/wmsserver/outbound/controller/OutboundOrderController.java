@@ -1,5 +1,6 @@
 package com.myproject.wmsserver.outbound.controller;
 
+import com.myproject.wmsserver.common.idempotent.Idempotent;
 import com.myproject.wmsserver.common.result.PageResult;
 import com.myproject.wmsserver.common.result.Result;
 import com.myproject.wmsserver.outbound.dto.OutboundOrderQuery;
@@ -43,7 +44,8 @@ public class OutboundOrderController {
         return Result.success(outboundOrderService.page(query));
     }
 
-    /** 创建出库单，data 返回新单据 id */
+    /** 创建出库单，data 返回新单据 id。理由同入库单创建 */
+    @Idempotent(bizType = "OUTBOUND_CREATE")
     @PostMapping
     public Result<Long> create(@Valid @RequestBody OutboundOrderSaveDTO dto) {
         return Result.success(outboundOrderService.create(dto));

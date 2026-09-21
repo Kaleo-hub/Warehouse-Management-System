@@ -1,5 +1,6 @@
 package com.myproject.wmsserver.inventory.controller;
 
+import com.myproject.wmsserver.common.idempotent.Idempotent;
 import com.myproject.wmsserver.common.result.PageResult;
 import com.myproject.wmsserver.common.result.Result;
 import com.myproject.wmsserver.inventory.dto.FreezeDTO;
@@ -19,6 +20,7 @@ import com.myproject.wmsserver.inventory.vo.ReconcileVO;
 import com.myproject.wmsserver.inventory.vo.StocktakingResultVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -45,7 +47,8 @@ import java.util.List;
  *   POST /reconcile                  对账
  *
  * 这么设计有两个好处：
- *   1. 每个动作背后都有明确业务语义，权限可以按动作拆（冻结和盘点不是谁都能干）
+ *   1. 每个动作背后都有明确业务语义，权限可以按动作拆 —— 已经落地：
+ *      下面五个写接口都要求 ADMIN / MANAGER，作业员操作不了（会拿 20003）
  *   2. 想改库存就必须说清楚「是什么业务原因」—— 做不到无理由改数，BR-008 才守得住
  *
  * 控制层只做「接收 → 委托 → 返回」，不写业务逻辑、不 try-catch（交给 GlobalExceptionHandler）。
@@ -111,14 +114,18 @@ public class InventoryController {
      * 冻结：frozen_qty +qty。
      * 货还在库里，但可用数量变少；冻结的库存不能被分配、不能被移库（BR-005）。
      */
+    @Idempotent(bizType = "INVENTORY_FREEZE", key = "#id", ttlMinutes = 10)
     @PostMapping("/inventories/{id}/freeze")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Result<Void> freeze(@PathVariable Long id, @Valid @RequestBody FreezeDTO dto) {
         inventoryAdjustService.freeze(id, dto);
         return Result.success();
     }
 
     /** 解冻：frozen_qty -qty，可用数量恢复 */
+    @Idempotent(bizType = "INVENTORY_UNFREEZE", key = "#id", ttlMinutes = 10)
     @PostMapping("/inventories/{id}/unfreeze")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Result<Void> unfreeze(@PathVariable Long id, @Valid @RequestBody FreezeDTO dto) {
         inventoryAdjustService.unfreeze(id, dto);
         return Result.success();
@@ -128,7 +135,9 @@ public class InventoryController {
      * 移库：整批或部分挪到另一个库位。
      * 转出转入在一个事务里，失败两边一起回滚。
      */
+    @Idempotent(bizType = "INVENTORY_TRANSFER", ttlMinutes = 10)
     @PostMapping("/transfers")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Result<Void> transfer(@Valid @RequestBody TransferDTO dto) {
         inventoryAdjustService.transfer(dto);
         return Result.success();
@@ -138,7 +147,9 @@ public class InventoryController {
      * 盘点：传实盘数量，后端算差异并写盘盈 / 盘亏流水。
      * data 里返回系统数量、实盘数量、差异和是否产生了变动。
      */
+    @Idempotent(bizType = "INVENTORY_STOCKTAKE", ttlMinutes = 10)
     @PostMapping("/stocktakings")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Result<StocktakingResultVO> stocktake(@Valid @RequestBody StocktakingDTO dto) {
         return Result.success(inventoryAdjustService.stocktake(dto));
     }
@@ -147,7 +158,9 @@ public class InventoryController {
      * 对账：按流水重算库存余额（BR-009）。
      * autoFix 默认 false，只检查不改数；传 true 才按流水重算余额（这是修派生数据，不写库存流水）。
      */
+    @Idempotent(bizType = "INVENTORY_RECONCILE", ttlMinutes = 10)
     @PostMapping("/reconcile")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Result<ReconcileVO> reconcile(
             @RequestParam(name = "autoFix", defaultValue = "false") boolean autoFix) {
         return Result.success(inventoryAdjustService.reconcile(autoFix));

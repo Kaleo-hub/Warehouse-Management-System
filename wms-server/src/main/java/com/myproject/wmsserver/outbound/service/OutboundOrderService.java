@@ -59,4 +59,12 @@ public interface OutboundOrderService {
      * 同样由 task 模块调用 —— 单据的状态流转必须由出库模块自己负责。
      */
     void markPicking(Long orderId);
+
+    /**
+     * 查出「分配后超过 timeoutMinutes 分钟还没往下走」的单据 id（BR-010）。
+     *
+     * 出这个只读方法是为了让定时任务能拿到待处理清单，
+     * 但【释放动作】仍然走本接口的 release()，状态流转始终归出库模块自己管。
+     */
+    List<Long> listTimeoutAllocatedOrderIds(int timeoutMinutes, int limit);
 }

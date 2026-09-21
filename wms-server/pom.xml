@@ -43,6 +43,22 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
+        <!--
+            AOP 支持：幂等切面和审计切面都靠 @Aspect。
+
+            两个坑：
+            1. 光有 spring-aop 不够 —— 它只是 Spring 自己的代理抽象，
+               @AspectJ 注解的解析需要 aspectjweaver。
+            2. Spring Boot 4 把原来的 spring-boot-starter-aop 改名成了
+               spring-boot-starter-aspectj。写成老名字会报
+               「dependencies.dependency.version is missing」——
+               因为新 BOM 里已经没有这个 artifact 的版本管理了。
+               （和 Flyway 拆成独立 starter 是同一类问题）
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>

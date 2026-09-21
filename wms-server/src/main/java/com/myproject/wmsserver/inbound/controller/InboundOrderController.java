@@ -1,5 +1,6 @@
 package com.myproject.wmsserver.inbound.controller;
 
+import com.myproject.wmsserver.common.idempotent.Idempotent;
 import com.myproject.wmsserver.common.result.PageResult;
 import com.myproject.wmsserver.common.result.Result;
 import com.myproject.wmsserver.inbound.dto.InboundOrderQuery;
@@ -46,7 +47,14 @@ public class InboundOrderController {
         return Result.success(inboundOrderService.page(query));
     }
 
-    /** 创建入库单，data 返回新单据 id */
+    /**
+     * 创建入库单，data 返回新单据 id。
+     *
+     * 【为什么需要幂等】这时候单号还不存在，没有任何「业务键」能把两次请求认成同一件事，
+     * 所以靠前端在打开新建页时生成的 X-Idempotent-Key（双击、重试都用同一个）。
+     * 不传也不至于出错：切面会退化成「业务键 anon + 请求体哈希」，内容完全相同的重复提交照样挡得住。
+     */
+    @Idempotent(bizType = "INBOUND_CREATE")
     @PostMapping
     public Result<Long> create(@Valid @RequestBody InboundOrderSaveDTO dto) {
         return Result.success(inboundOrderService.create(dto));
@@ -58,7 +66,16 @@ public class InboundOrderController {
         return Result.success(inboundOrderService.get(id));
     }
 
-    /** 收货登记：整单一次提交。注意这一步不增加库存 */
+    /**
+     * 收货登记：整单一次提交。注意这一步不增加库存。
+     *
+     * 【为什么这个接口必须幂等】一张入库单允许分批收货，所以
+     * 「状态」挡不住重复（单据还在 RECEIVING），「数量上限」也挡不住
+     * （预计 100，收了 30 再收 30 是合法的）。
+     * 唯一能识别「这就是刚才那次提交」的，只有业务键 + 请求体哈希。
+     * TTL 取 10 分钟：收货是现场高频动作，去重窗口短一点，减少误挡。
+     */
+    @Idempotent(bizType = "INBOUND_RECEIVE", key = "#id", ttlMinutes = 10)
     @PostMapping("/{id}/receive")
     public Result<Void> receive(@PathVariable Long id,
                                 @Valid @RequestBody InboundReceiveDTO dto) {

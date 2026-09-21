@@ -2,6 +2,7 @@ package com.myproject.wmsserver.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -10,6 +11,18 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
+/*
+ * 开启方法级鉴权，让 @PreAuthorize 生效。
+ *
+ * 【为什么不是配在 HttpSecurity 里】
+ * 这个项目的登录态是 JwtInterceptor 解析 token 得到的（不是 Spring Security 的 filter chain），
+ * authorizeHttpRequests 阶段还看不到用户身份。
+ * 而 @PreAuthorize 是在「Controller 方法被调用前」由 AOP 校验的 ——
+ * 那时候 JwtInterceptor 已经跑完、SecurityContext 已经填好了，正好能拿到角色。
+ * 所以鉴权分两层：filter chain 全放行（只负责关掉不需要的默认行为），
+ * 真正的鉴权在 JwtInterceptor（认证）+ @PreAuthorize（授权）。
+ */
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Bean

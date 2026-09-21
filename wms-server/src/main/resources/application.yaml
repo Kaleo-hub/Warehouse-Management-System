@@ -32,6 +32,27 @@ wms:
     secret: ${JWT_SECRET:wms-local-dev-secret-key-change-me-before-production-2026}
     expire-minutes: 120
 
+# 出库单超时自动释放（BR-010）
+# 分配之后库存就被 locked_qty 占住了，这单一直没人处理的话那批货就被锁死 ——
+# 这里配的就是「等多久算超时」和「多久扫一次」。
+  outbound:
+    # 分配后多少分钟还没往下走就自动释放
+    allocated-timeout-minutes: 30
+    # 扫描间隔与首次延迟（毫秒）。自测时可以把 scan-ms 调成 5000 快速看效果
+    timeout-scan-ms: 60000
+    timeout-initial-delay-ms: 20000
+    # 单轮最多处理多少张单
+    timeout-batch-size: 50
+    # 总开关：本地调试或压测时可以关掉，避免后台悄悄改数据
+    timeout-enabled: true
+
+# 幂等记录清理
+# 幂等表是只增的，没有清理会无限长。默认 10 分钟扫一次、每次最多删 1 万行。
+  idempotent:
+    cleanup-ms: 600000
+    cleanup-initial-delay-ms: 60000
+    cleanup-enabled: true
+
 # 日志配置
 logging:
   level:

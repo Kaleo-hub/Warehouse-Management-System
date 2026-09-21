@@ -7,6 +7,9 @@ import com.myproject.wmsserver.outbound.entity.OutboundOrder;
 import com.myproject.wmsserver.outbound.vo.OutboundOrderVO;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 public interface OutboundOrderMapper extends BaseMapper<OutboundOrder> {
 
     IPage<OutboundOrderVO> selectOrderPage(IPage<OutboundOrderVO> page,
@@ -48,4 +51,17 @@ public interface OutboundOrderMapper extends BaseMapper<OutboundOrder> {
      * 属于「读投影」而不是「写别人的表」，规则没有被破坏。
      */
     int countUnfinishedPickTask(@Param("orderId") Long orderId);
+
+    /**
+     * 找出「已经分配、但分配时间早于 deadline 还没往下走」的单据 id（BR-010）。
+     *
+     * 只找 ALLOCATED：
+     *   - 还没生成拣货任务 → 锁定白占着
+     *   - 不能找 PICKING：那时候货可能已经被从货架上拿下来了，
+     *     把锁定还回去等于账实不符，只能往前走（见 OutboundStatus.canRelease 的注释）
+     *
+     * @param limit 单次最多取多少条，避免一次定时任务锁太多行
+     */
+    List<Long> selectTimeoutAllocatedIds(@Param("deadline") LocalDateTime deadline,
+                                         @Param("limit") int limit);
 }

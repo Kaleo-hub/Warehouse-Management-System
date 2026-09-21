@@ -36,6 +36,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -374,6 +375,16 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
         }
 
         log.info("出库单发货完成 orderNo={} 核销 {} 条分配", order.getOrderNo(), allocates.size());
+    }
+
+    @Override
+    public List<Long> listTimeoutAllocatedOrderIds(int timeoutMinutes, int limit) {
+        if (timeoutMinutes <= 0 || limit <= 0) {
+            return List.of();
+        }
+        // 分配时间早于「现在 - 阈值」的才算超时
+        LocalDateTime deadline = LocalDateTime.now().minusMinutes(timeoutMinutes);
+        return orderMapper.selectTimeoutAllocatedIds(deadline, limit);
     }
 
     /* ============================ 拣货完成回调 ============================ */

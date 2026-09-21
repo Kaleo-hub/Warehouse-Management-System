@@ -4,6 +4,7 @@ import com.myproject.wmsserver.common.result.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -22,6 +23,23 @@ public class GlobalExceptionHandler {
         ErrorCode ec = e.getErrorCode();
         log.warn("业务异常 code={} message={}", ec.getCode(), ec.getMessage());
         return ResponseEntity.status(ec.getHttpStatus()).body(Result.fail(ec));
+    }
+
+    /**
+     * 权限不足：@PreAuthorize 拦下来的请求。
+     *
+     * 【为什么统一转 Result】Spring Security 默认会返回它自己那套 403 页面 / JSON，
+     * 和项目「业务错误看响应体里的 code」的约定不一致，前端还得多写一套解析。
+     * 这里接住它，转成和其他错误一样的结构（HTTP 403 + code 20003）。
+     *
+     * 【为什么不用 log.error】权限不够是正常的业务事件（作业员点了主管才能干的按钮），
+     * 不是系统故障，warn 就够了，堆栈也不用打。
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Result<Void>> handleAccessDenied(AccessDeniedException e) {
+        log.warn("权限不足: {}", e.getMessage());
+        return ResponseEntity.status(AuthErrorCode.FORBIDDEN.getHttpStatus())
+                .body(Result.fail(AuthErrorCode.FORBIDDEN));
     }
 
     /** 参数校验失败：把字段级错误放进 data */

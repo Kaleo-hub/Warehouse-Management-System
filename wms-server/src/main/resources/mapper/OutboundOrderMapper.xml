@@ -126,4 +126,21 @@
           AND status NOT IN ('DONE', 'CANCELLED')
     </select>
 
+    <!--
+      超时未处理的已分配单据（BR-010）。
+      走 idx_allocate_time(status, allocate_time)：等值列 status 在前，范围列 allocate_time 在后
+      （建表时就为这个场景留好了索引，所以这个查询不需要全表扫）。
+      排序用 allocate_time 升序 —— 等得最久的先放，被 LIMIT 截掉的是等得最短的，公平。
+    -->
+    <select id="selectTimeoutAllocatedIds" resultType="java.lang.Long">
+        SELECT id
+        FROM outbound_order
+        WHERE deleted = 0
+          AND status = 'ALLOCATED'
+          AND allocate_time IS NOT NULL
+          AND allocate_time &lt; #{deadline}
+        ORDER BY allocate_time ASC
+        LIMIT #{limit}
+    </select>
+
 </mapper>

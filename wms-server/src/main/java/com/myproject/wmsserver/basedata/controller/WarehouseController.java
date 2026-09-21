@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -31,7 +32,12 @@ public class WarehouseController {
     }
 
     /** 新增 */
+    /*
+     * 主数据维护属于「业务管理」：ADMIN / MANAGER 可以增删改，OPERATOR 只能查。
+     * 角色分工见 system/enums/UserRole。
+     */
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Result<Long> create(@Valid @RequestBody WarehouseSaveDTO dto) {
         return Result.success(warehouseService.create(dto));
     }
@@ -44,6 +50,7 @@ public class WarehouseController {
 
     /** 修改 */
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody WarehouseSaveDTO dto) {
         warehouseService.update(id, dto);
         return Result.success();
@@ -51,6 +58,7 @@ public class WarehouseController {
 
     /** 删除（逻辑删除） */
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Result<Void> delete(@PathVariable Long id) {
         warehouseService.delete(id);
         return Result.success();

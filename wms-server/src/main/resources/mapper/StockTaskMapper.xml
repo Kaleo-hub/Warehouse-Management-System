@@ -136,4 +136,21 @@
           AND deleted = 0
     </update>
 
+    <!--
+      作废未完成的拣货任务（BR-010）。
+      status in (...) 而不是 != 'DONE'：只作废「还没干完」的，
+      已经完成的任务不能因为单据超时被改成 CANCELLED —— 那是抹掉别人干过的活。
+    -->
+    <update id="cancelUnfinishedTasks">
+        UPDATE stock_task
+        SET status      = 'CANCELLED',
+            remark      = #{reason},
+            finish_time = NOW(3)
+        WHERE source_type = #{sourceType}
+          AND source_id = #{sourceId}
+          AND task_type = #{taskType}
+          AND status IN ('CREATED', 'ASSIGNED', 'PROCESSING')
+          AND deleted = 0
+    </update>
+
 </mapper>

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.common.idempotent.mapper.IdempotentRecordMapper">
+
+    <!--
+      三条状态流转 SQL 都带「当前状态」条件，不是无条件 update。
+      这样即使同一 key 的请求在极端情况下交错，也不会互相覆盖：
+      比如一个刚失败的记录不能被另一个线程的「成功」写歪。
+    -->
+    <!--
+      抢位：唯一索引是唯一的裁判，不靠应用层的 if。
+
+      ========== 为什么不用 INSERT ... ON DUPLICATE KEY UPDATE id = id ==========
+      那个写法看着更短，但它【判断不了插入还是命中】：MySQL 的 affected rows 受
+      连接参数 CLIENT_FOUND_ROWS 影响（Connector/J 默认就开着），
+      条件匹配但值没变的 UPDATE 会返回「匹配行数 1」而不是「修改行数 0」。
+      结果就是「已经存在」也被当成「插入成功」—— 幂等失效，实测确实踩到了
+      （同一个 key 提交两次，建了两张入库单，只留了一条幂等记录）。
+
+      换成 INSERT ... SELECT ... WHERE NOT EXISTS 之后语义就确定了：
+        真的插进去 → 影响行数 1
+        已存在被 WHERE 挡掉 → 影响行数 0（一条都没插）
+      并发下两个线程都通过了 NOT EXISTS 时，唯一索引会让其中一个报重复键，
+      由调用方捕获后当成「已存在」处理 —— 那是最后一道保险。
+    -->
+    <insert id="tryInsert">
+        INSERT INTO idempotent_record (idempotent_key, biz_type, request_hash, status, expire_time)
+        SELECT #{key}, #{bizType}, #{requestHash}, 0, #{expireTime}
+        FROM DUAL
+        WHERE NOT EXISTS (
+            SELECT 1 FROM idempotent_record WHERE idempotent_key = #{key}
+        )
+    </insert>
+
+    <update id="markSuccess">
+        UPDATE idempotent_record
+        SET status          = 1,
+            result_snapshot = #{snapshot},
+            error_msg       = NULL
+        WHERE idempotent_key = #{key}
+          AND status = 0
+    </update>
+
+    <update id="markFailed">
+        UPDATE idempotent_record
+        SET status    = 2,
+            error_msg = #{errorMsg}
+        WHERE idempotent_key = #{key}
+          AND status = 0
+    </update>
+
+    <!-- 允许重试：只把「上一次失败」的改回处理中，其他状态不动 -->
+    <update id="resetToProcessing">
+        UPDATE idempotent_record
+        SET status    = 0,
+            error_msg = NULL
+        WHERE idempotent_key = #{key}
+          AND status = 2
+          AND (expire_time IS NULL OR expire_time &gt; NOW(3))
+    </update>
+
+    <!-- 过期清理：分批删，避免一次删太多行把数据库卡住 -->
+    <delete id="deleteExpired">
+        DELETE FROM idempotent_record
+        WHERE expire_time IS NOT NULL
+          AND expire_time &lt; NOW(3)
+        LIMIT #{limit}
+    </delete>
+
+</mapper>

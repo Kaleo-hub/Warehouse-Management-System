@@ -48,4 +48,16 @@ public interface StockTaskService {
      *   4. 回写入库单明细 putaway_qty，全部上架完把单据推到 PUTAWAY_DONE
      */
     void complete(Long taskId, StockTaskCompleteDTO dto);
+
+    /**
+     * 作废某张出库单下所有未完成的拣货任务（BR-010 超时释放调用）。
+     *
+     * 为什么要走 Service 而不是让定时任务直接改 stock_task：
+     * 跨模块只能调 Service，这是 docs/02 定下的依赖方向 ——
+     * 出库模块自己也只能「读投影」地 count 一下任务，不能写别人的表。
+     *
+     * @param reason 作废原因，会写进任务的 remark，方便事后追查
+     * @return 实际作废的条数
+     */
+    int cancelUnfinishedPickTasks(Long orderId, String reason);
 }

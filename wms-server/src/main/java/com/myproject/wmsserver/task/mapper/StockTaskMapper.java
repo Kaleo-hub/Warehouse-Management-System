@@ -48,4 +48,16 @@ public interface StockTaskMapper extends BaseMapper<StockTask> {
 
     /** 取该仓库的收货暂存位（location_type = 'TEMP'），作为上架任务的源库位 */
     Long selectTempLocationId(@Param("warehouseId") Long warehouseId);
+
+    /**
+     * 作废某张来源单据下所有未完成的拣货任务（BR-010 超时释放用）。
+     *
+     * 一条 UPDATE 搞定，不先把任务查出来再逐条改：
+     * 逐条改既慢、又有「查到一半状态变了」的窗口，而 update ... where status in (...) 天然是原子的。
+     * 已经 DONE / CANCELLED 的任务不动 —— 完成过的活不能因为超时被抹掉。
+     */
+    int cancelUnfinishedTasks(@Param("sourceType") String sourceType,
+                              @Param("sourceId") Long sourceId,
+                              @Param("taskType") String taskType,
+                              @Param("reason") String reason);
 }

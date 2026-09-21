@@ -225,6 +225,20 @@ public class StockTaskServiceImpl implements StockTaskService {
         return created;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int cancelUnfinishedPickTasks(Long orderId, String reason) {
+        if (orderId == null) {
+            return 0;
+        }
+        int affected = taskMapper.cancelUnfinishedTasks(
+                SOURCE_OUTBOUND, orderId, TaskType.PICK.name(), reason);
+        if (affected > 0) {
+            log.info("作废未完成拣货任务 orderId={} 条数={} 原因={}", orderId, affected, reason);
+        }
+        return affected;
+    }
+
     /* ============================ 领取 / 开始 ============================ */
 
     @Override
