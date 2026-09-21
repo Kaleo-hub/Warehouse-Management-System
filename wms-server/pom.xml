@@ -63,6 +63,17 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
+        <!--
+          Excel 导出。选 EasyExcel 而不是裸 POI 的原因：
+          写 xlsx 的样板代码（建 workbook、建 sheet、逐格 setCellValue、管流和关闭）
+          POI 要几十行，EasyExcel 只要一行 doWrite —— 导出的本质就是
+          「一个 VO 列表 → 一张表」，没必要为这件事写一堆底层代码。
+        -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>easyexcel</artifactId>
+            <version>3.3.4</version>
+        </dependency>
 
         <dependency>
             <groupId>com.mysql</groupId>

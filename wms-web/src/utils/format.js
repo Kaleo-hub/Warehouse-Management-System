@@ -25,6 +25,25 @@ const pad = (n) => String(n).padStart(2, '0')
  *   [2026, 9, 16, 11, 3, 24]           开了 WRITE_DATES_AS_TIMESTAMPS
  * 统一输出 yyyy-MM-dd HH:mm:ss，表格里不会因为时间串过长被撑爆。
  */
+/**
+ * 触发浏览器下载。
+ *
+ * 【为什么不用 location.href 直接开导出链接】导出接口要带 Authorization 头，
+ * 直接把 URL 丢给浏览器是带不上 token 的（会 401）。
+ * 所以后端返回二进制，前端用 blob 接下再落盘 —— 这样错误也能被 axios 正常捕获
+ * （如果后端出错返回了 JSON 错误体，我们还来得及提示用户，而不是存下一个打不开的文件）。
+ */
+export function triggerDownload(blob, fallbackName) {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fallbackName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
+}
+
 export function formatDateTime(value) {
   if (value === null || value === undefined || value === '') return '-'
 

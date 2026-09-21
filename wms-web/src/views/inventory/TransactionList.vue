@@ -1,5 +1,9 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
+import { triggerDownload } from '@/utils/format'
+import { toastError } from '@/utils/error'
 import CrudTable from '@/components/crud/CrudTable.vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { inventoryApi } from '@/api/inventory'
@@ -48,6 +52,28 @@ function signed(value) {
   const num = Number(value) || 0
   return num > 0 ? `+${num}` : String(num)
 }
+/* ---------------- 导出 ---------------- */
+
+const exporting = ref(false)
+
+/**
+ * 导出当前筛选结果。
+ * 分页参数丢掉：导的是「所有匹配的行」，不是当前这一页。
+ * 这也是最容易误解的地方 —— 用户看到 10 行、导出来 5000 行，要能解释清楚。
+ */
+async function handleExport(params) {
+  exporting.value = true
+  try {
+    const { page, size, ...filters } = params
+    const blob = await inventoryApi.exportTransactions(filters)
+    triggerDownload(blob, `库存流水_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    ElMessage.success('导出成功，单次最多 5000 行')
+  } catch (error) {
+    toastError(error, '导出失败')
+  } finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <template>
@@ -66,6 +92,12 @@ function signed(value) {
       :can-delete="false"
       entity-name="流水"
     >
+      <template #toolbar="{ params }">
+        <el-button :icon="Download" :loading="exporting" @click="handleExport(params)">
+          导出 Excel
+        </el-button>
+      </template>
+
       <template #col-batchNo="{ row }">
         <span :class="row.batchNo ? 'mono' : 'muted'">{{ row.batchNo || '无批次' }}</span>
       </template>

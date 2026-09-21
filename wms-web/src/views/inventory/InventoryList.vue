@@ -2,7 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
 import { toastError } from '@/utils/error'
+import { triggerDownload } from '@/utils/format'
 import CrudTable from '@/components/crud/CrudTable.vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { inventoryApi } from '@/api/inventory'
@@ -104,6 +106,29 @@ function goTransfer(row) {
   router.push({ path: '/inventory/transfer', query: { inventoryId: row.id } })
 }
 
+/* ---------------- 导出 ---------------- */
+
+/**
+ * 导出当前筛选结果。
+ * params 由 CrudTable 的工具栏插槽给出来 —— 和列表查询用的是同一份条件，
+ * 不会出现「筛了 A 导出 B」。分页参数要丢掉（导的是全部匹配行，不是当前页）。
+ */
+const exporting = ref(false)
+
+async function handleExport(params) {
+  exporting.value = true
+  try {
+    const { page, size, ...filters } = params
+    const blob = await inventoryApi.exportInventory(filters)
+    triggerDownload(blob, `库存_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    ElMessage.success('导出成功，单次最多 5000 行')
+  } catch (error) {
+    toastError(error, '导出失败')
+  } finally {
+    exporting.value = false
+  }
+}
+
 function goStocktake(row) {
   router.push({ path: '/inventory/stocktaking', query: { inventoryId: row.id } })
 }
@@ -127,6 +152,12 @@ function goStocktake(row) {
       :action-width="240"
       entity-name="库存"
     >
+      <template #toolbar="{ params }">
+        <el-button :icon="Download" :loading="exporting" @click="handleExport(params)">
+          导出 Excel
+        </el-button>
+      </template>
+
       <template #col-batchNo="{ row }">
         <span :class="row.batchNo ? 'mono' : 'muted'">{{ row.batchNo || '无批次' }}</span>
       </template>

@@ -12,6 +12,17 @@ export const inventoryApi = {
   /** 库存分页查询：page / size / warehouseId / skuId / locationId / batchNo / keyword */
   page: (params) => request.get('/v1/inventory/inventories', { params }),
 
+  /**
+   * 导出库存 Excel。筛选条件和列表页完全一致，单次最多 5000 行。
+   * responseType: 'blob' —— 拿到二进制而不是 JSON，交给 triggerDownload 落盘。
+   */
+  exportInventory: (params) =>
+    request.get('/v1/inventory/inventories/export', { params, responseType: 'blob' }),
+
+  /** 导出库存流水 Excel */
+  exportTransactions: (params) =>
+    request.get('/v1/inventory/transactions/export', { params, responseType: 'blob' }),
+
   /** 库存详情（移库 / 盘点页面深链进来时拿初值） */
   detail: (id) => request.get(`/v1/inventory/inventories/${id}`),
 

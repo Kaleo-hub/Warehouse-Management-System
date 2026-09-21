@@ -78,21 +78,33 @@ const page = reactive({ current: 1, size: 10, total: 0 })
 const rows = ref([])
 const loading = ref(false)
 
+/**
+ * 把「当前查询条件 + 分页」拼成后端要的参数。
+ *
+ * 抽成独立函数是为了让工具栏插槽也能拿到它 —— 导出必须和列表用同一套条件，
+ * 否则会出现「我筛了 A，导出来的是 B」。让两边都调用同一个函数，是唯一能保证
+ * 它们永远一致的做法（复制一份条件拼装逻辑迟早会分叉）。
+ */
+function buildParams() {
+  const params = { page: page.current, size: page.size }
+  props.searchFields.forEach((field) => {
+    const value = query[field.prop]
+    if (field.type === 'daterange') {
+      if (Array.isArray(value) && value.length === 2) {
+        params[field.beginProp || 'beginTime'] = value[0]
+        params[field.endProp || 'endTime'] = value[1]
+      }
+      return
+    }
+    if (value !== '' && value !== null && value !== undefined) params[field.prop] = value
+  })
+  return params
+}
+
 async function load() {
   loading.value = true
   try {
-    const params = { page: page.current, size: page.size }
-    props.searchFields.forEach((field) => {
-      const value = query[field.prop]
-      if (field.type === 'daterange') {
-        if (Array.isArray(value) && value.length === 2) {
-          params[field.beginProp || 'beginTime'] = value[0]
-          params[field.endProp || 'endTime'] = value[1]
-        }
-        return
-      }
-      if (value !== '' && value !== null && value !== undefined) params[field.prop] = value
-    })
+    const params = buildParams()
 
     const data = await props.api.page(params)
 
@@ -327,7 +339,7 @@ defineExpose({ reload: load, openCreate })
           <slot name="toolbar-left" />
         </div>
         <div class="crud__toolbar-right">
-          <slot name="toolbar" :reload="load" />
+          <slot name="toolbar" :reload="load" :params="buildParams()" />
           <el-button v-if="canCreate" type="primary" :icon="Plus" @click="openCreate">
             新建{{ entityName }}
           </el-button>
