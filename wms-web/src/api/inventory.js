@@ -13,6 +13,24 @@ export const inventoryApi = {
 
   /** 条库存流水明细（对账用） */
   transactionDetail: (id) => request.get(`/v1/inventory/transactions/${id}`),
+
+  /**
+   * 库存总览（工作台看板）。
+   * 一次返回：在库/锁定/冻结/可用、SKU 数、库位占用率、待处理数、按仓库分布。
+   */
+  summary: (params) => request.get('/v1/inventory/summary', { params }),
+
+  /**
+   * 分组合并汇总。
+   * @param {{dimension?: 'WAREHOUSE'|'ZONE'|'SKU', warehouseId?: number}} params
+   */
+  groupedSummary: (params) => request.get('/v1/inventory/summary/grouped', { params }),
+
+  /**
+   * 库存预警：临期 / 冻结 / 库位超容。
+   * @param {{expireDays?: number, warehouseId?: number}} params
+   */
+  alerts: (params) => request.get('/v1/inventory/alerts', { params }),
 }
 
 export default inventoryApi

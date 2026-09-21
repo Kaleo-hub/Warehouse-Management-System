@@ -5,6 +5,7 @@ import {
   Download,
   Goods,
   Grid,
+  Histogram,
   List,
   Location,
   Odometer,
@@ -12,6 +13,7 @@ import {
   Setting,
   Upload,
   Van,
+  Warning,
 } from '@element-plus/icons-vue'
 
 /**
@@ -43,6 +45,8 @@ export const menuGroups = [
     title: '库存管理',
     items: [
       { title: '库存查询', path: '/inventory/stock', icon: Box },
+      { title: '库存汇总', path: '/inventory/summary', icon: Histogram },
+      { title: '库存预警', path: '/inventory/alerts', icon: Warning },
       { title: '库存流水', path: '/inventory/transactions', icon: List },
     ],
   },

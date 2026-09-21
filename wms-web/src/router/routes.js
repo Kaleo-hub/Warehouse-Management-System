@@ -107,6 +107,18 @@ export const routes = [
         meta: { title: '库存查询', breadcrumb: ['库存管理', '库存查询'] },
       },
       {
+        path: 'inventory/summary',
+        name: 'InventorySummary',
+        component: () => import('@/views/inventory/InventorySummary.vue'),
+        meta: { title: '库存汇总', breadcrumb: ['库存管理', '库存汇总'] },
+      },
+      {
+        path: 'inventory/alerts',
+        name: 'InventoryAlert',
+        component: () => import('@/views/inventory/InventoryAlert.vue'),
+        meta: { title: '库存预警', breadcrumb: ['库存管理', '库存预警'] },
+      },
+      {
         path: 'inventory/transactions',
         name: 'TransactionList',
         component: () => import('@/views/inventory/TransactionList.vue'),

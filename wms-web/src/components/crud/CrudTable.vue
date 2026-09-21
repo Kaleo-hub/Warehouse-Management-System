@@ -317,7 +317,7 @@ defineExpose({ reload: load, openCreate })
         </el-table-column>
 
         <el-table-column
-          v-if="canUpdate || canDelete || $slots['row-actions']"
+          v-if="canUpdate || canDelete || $slots['row-actions'] || $slots['row-actions-extra']"
           label="操作"
           :width="actionWidth"
           align="right"
@@ -325,6 +325,9 @@ defineExpose({ reload: load, openCreate })
         >
           <template #default="{ row }">
             <div class="crud__row-actions">
+              <!-- 额外行操作：渲染在默认「编辑/删除」前面，不影响默认按钮 -->
+              <slot name="row-actions-extra" :row="row" :reload="load" />
+
               <!-- 传了 row-actions 插槽就完全接管行操作，否则用默认的编辑/删除 -->
               <slot name="row-actions" :row="row" :reload="load">
                 <el-button
