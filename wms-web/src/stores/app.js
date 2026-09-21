@@ -1,6 +1,13 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getStoredTheme, setStoredTheme } from '@/utils/storage'
+import {
+  getStoredCurrentWarehouseId,
+  getStoredPreferences,
+  getStoredTheme,
+  setStoredCurrentWarehouseId,
+  setStoredPreferences,
+  setStoredTheme,
+} from '@/utils/storage'
 
 const MOBILE_QUERY = '(max-width: 900px)'
 
@@ -21,6 +28,12 @@ export const useAppStore = defineStore('app', () => {
   const mobileSidebarOpen = ref(false)
   const isMobile = ref(resolveIsMobile())
   const theme = ref(resolveInitialTheme())
+  /** 当前仓库：作为业务页面的默认过滤范围，可随时在顶栏切换 */
+  const currentWarehouseId = ref(getStoredCurrentWarehouseId())
+  /** 用户界面偏好。只影响本浏览器，不伪装成服务端全局配置 */
+  const storedPreferences = getStoredPreferences()
+  const alertDays = ref([7, 15, 30, 60, 90].includes(Number(storedPreferences.alertDays)) ? Number(storedPreferences.alertDays) : 30)
+  const pageSize = ref([10, 20, 50, 100].includes(Number(storedPreferences.pageSize)) ? Number(storedPreferences.pageSize) : 10)
 
   const isDark = computed(() => theme.value === 'dark')
 
@@ -51,15 +64,37 @@ export const useAppStore = defineStore('app', () => {
     if (!event.matches) mobileSidebarOpen.value = false
   })
 
+  function setCurrentWarehouse(id) {
+    currentWarehouseId.value = id ? Number(id) : null
+    setStoredCurrentWarehouseId(currentWarehouseId.value)
+  }
+
+  function updatePreferences(next = {}) {
+    if (next.alertDays !== undefined) alertDays.value = Number(next.alertDays)
+    if (next.pageSize !== undefined) pageSize.value = Number(next.pageSize)
+    setStoredPreferences({ alertDays: alertDays.value, pageSize: pageSize.value })
+  }
+
+  function resetPreferences() {
+    alertDays.value = 30
+    pageSize.value = 10
+    setStoredPreferences({ alertDays: 30, pageSize: 10 })
+  }
   return {
     sidebarCollapsed,
     mobileSidebarOpen,
     isMobile,
     theme,
     isDark,
+    currentWarehouseId,
+    alertDays,
+    pageSize,
     applyTheme,
     toggleTheme,
     toggleSidebar,
     closeMobileSidebar,
+    setCurrentWarehouse,
+    updatePreferences,
+    resetPreferences,
   }
 })

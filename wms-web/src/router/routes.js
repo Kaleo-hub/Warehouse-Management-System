@@ -177,6 +177,8 @@ export const routes = [
         name: 'StocktakingOrderDetail',
         component: () => import('@/views/inventory/StocktakingOrderDetail.vue'),
         meta: { title: '盘点单详情', breadcrumb: ['库存管理', '盘点单', '详情'], roles: ['ADMIN', 'MANAGER'] },
+      },
+      {
         path: 'inventory/reconcile',
         name: 'Reconcile',
         component: () => import('@/views/inventory/Reconcile.vue'),
@@ -184,6 +186,12 @@ export const routes = [
       },
 
       /* ---------------- 系统 ---------------- */
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: () => import('@/views/system/SettingsView.vue'),
+        meta: { title: '系统设置', breadcrumb: ['系统', '系统设置'], roles: ['ADMIN'] },
+      },
       {
         path: 'system/users',
         name: 'UserList',

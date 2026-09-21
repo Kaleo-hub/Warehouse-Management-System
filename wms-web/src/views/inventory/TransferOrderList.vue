@@ -1,14 +1,18 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import CrudTable from '@/components/crud/CrudTable.vue'
 import PageHeading from '@/components/common/PageHeading.vue'
+import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
 import { transferOrderApi } from '@/api/inventory'
 import { TRANSFER_ORDER_STATUS, TRANSFER_ORDER_STATUS_OPTIONS } from '@/constants/inventory'
 
 const router = useRouter()
 const tableRef = ref(null)
+const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions()
+onMounted(loadWarehouses)
+
 
 const columns = [
   { prop: 'orderNo', label: '移库单号', width: 180, mono: true },
@@ -22,6 +26,7 @@ const columns = [
 ]
 
 const searchFields = computed(() => [
+  { prop: 'warehouseId', label: '仓库', type: 'select', options: warehouseOptions.value },
   { prop: 'keyword', label: '关键字', placeholder: '单号 / 库位' },
   { prop: 'status', label: '单据状态', type: 'select', options: TRANSFER_ORDER_STATUS_OPTIONS },
 ])

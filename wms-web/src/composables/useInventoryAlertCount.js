@@ -1,5 +1,6 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { inventoryApi } from '@/api/inventory'
+import { useAppStore } from '@/stores/app'
 
 /**
  * 库存预警条数，给顶栏的铃铛用。
@@ -11,13 +12,17 @@ import { inventoryApi } from '@/api/inventory'
  * 想看详情本来就会点进预警页，那里有正经的错误提示。
  */
 export function useInventoryAlertCount() {
+  const app = useAppStore()
   const alertTotal = ref(0)
   const loading = ref(false)
 
   async function load() {
     loading.value = true
     try {
-      const data = await inventoryApi.alerts({ expireDays: 30 })
+      const data = await inventoryApi.alerts({
+        expireDays: app.alertDays,
+        warehouseId: app.currentWarehouseId || undefined,
+      })
       alertTotal.value =
         (data?.expiring?.length || 0) +
         (data?.frozen?.length || 0) +
@@ -28,6 +33,8 @@ export function useInventoryAlertCount() {
       loading.value = false
     }
   }
+
+  watch([() => app.currentWarehouseId, () => app.alertDays], load)
 
   return { alertTotal, loading, load }
 }

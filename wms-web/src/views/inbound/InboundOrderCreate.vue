@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAppStore } from '@/stores/app'
 import { ElMessage } from 'element-plus'
 import { toastError } from '@/utils/error'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -21,6 +22,7 @@ const router = useRouter()
 const formRef = ref(null)
 const itemsRef = ref(null)
 const submitting = ref(false)
+const app = useAppStore()
 /**
  * 幂等键：进入页面时生成一次。
  * 双击提交、超时重试都用它 —— 服务端凭它认出「这是同一次创建动作」，只建一张单。
@@ -31,7 +33,7 @@ const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions(
 const { options: skuOptions, load: loadSkus } = useSkuOptions()
 
 const form = reactive({
-  warehouseId: null,
+  warehouseId: app.currentWarehouseId,
   /**
    * 供应商：现在存的是【主数据 id】。
    *
@@ -52,6 +54,10 @@ const rules = {
 const totalQty = computed(() =>
   form.items.reduce((sum, row) => sum + (Number(row.expectQty) || 0), 0),
 )
+
+watch(() => app.currentWarehouseId, (id) => {
+  if (id && !form.warehouseId) form.warehouseId = id
+})
 
 onMounted(async () => {
   await Promise.all([loadWarehouses(), loadSkus()])

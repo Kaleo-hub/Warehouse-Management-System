@@ -7,6 +7,8 @@ const USER_KEY = 'wms:user'
 const REMEMBER_KEY = 'wms:remember'
 const THEME_KEY = 'wms:theme'
 const MENU_GROUPS_KEY = 'wms:menuGroups'
+const CURRENT_WAREHOUSE_KEY = 'wms:currentWarehouseId'
+const PREFERENCES_KEY = 'wms:preferences'
 
 function read(key, fallback = null) {
   try {
@@ -99,6 +101,32 @@ export function setStoredMenuGroups(groups) {
   write(MENU_GROUPS_KEY, JSON.stringify(groups))
 }
 
+/* ---------- 当前仓库 ---------- */
+export function getStoredCurrentWarehouseId() {
+  const value = Number(read(CURRENT_WAREHOUSE_KEY, ''))
+  return Number.isInteger(value) && value > 0 ? value : null
+}
+
+export function setStoredCurrentWarehouseId(id) {
+  if (id) write(CURRENT_WAREHOUSE_KEY, String(id))
+  else remove(CURRENT_WAREHOUSE_KEY)
+}
+
+/* ---------- 界面偏好 ---------- */
+export function getStoredPreferences() {
+  const raw = read(PREFERENCES_KEY)
+  if (!raw) return {}
+  try {
+    const value = JSON.parse(raw)
+    return value && typeof value === 'object' ? value : {}
+  } catch {
+    return {}
+  }
+}
+
+export function setStoredPreferences(preferences) {
+  write(PREFERENCES_KEY, JSON.stringify(preferences || {}))
+}
 /* ---------- 退出登录时统一清理 ---------- */
 export function clearAuthStorage() {
   remove(TOKEN_KEY)

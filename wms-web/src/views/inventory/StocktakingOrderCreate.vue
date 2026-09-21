@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAppStore } from '@/stores/app'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import PageHeading from '@/components/common/PageHeading.vue'
@@ -11,6 +12,7 @@ import { fetchAllOptions } from '@/utils/loadAllOptions'
 import { toastError } from '@/utils/error'
 
 const router = useRouter()
+const app = useAppStore()
 const formRef = ref(null)
 const submitting = ref(false)
 const idempotentKey = useIdempotentKey()
@@ -23,13 +25,21 @@ const rules = {
 
 const selectedLocation = computed(() => locations.value.find((item) => item.id === form.locationId))
 
-onMounted(async () => {
+async function loadLocations() {
   try {
-    locations.value = (await fetchAllOptions(locationApi.page)).filter((item) => item.status === 'ENABLED')
+    locations.value = (await fetchAllOptions((params) =>
+      locationApi.page({ ...params, warehouseId: app.currentWarehouseId || undefined }),
+    )).filter((item) => item.status === 'ENABLED')
+    if (form.locationId && !locations.value.some((item) => item.id === form.locationId)) {
+      form.locationId = null
+    }
   } catch (error) {
     toastError(error, '库位加载失败')
   }
-})
+}
+
+watch(() => app.currentWarehouseId, loadLocations)
+onMounted(loadLocations)
 
 async function submit() {
   const valid = await formRef.value?.validate().catch(() => false)

@@ -17,6 +17,7 @@ import {
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useInventoryAlertCount } from '@/composables/useInventoryAlertCount'
+import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
 import { userApi } from '@/api/system'
 import { roleLabel } from '@/utils/format'
 import { toastError } from '@/utils/error'
@@ -25,6 +26,7 @@ const route = useRoute()
 const router = useRouter()
 const app = useAppStore()
 const auth = useAuthStore()
+const { options: warehouseOptions, load: loadWarehouseOptions } = useWarehouseOptions()
 
 const isFullscreen = ref(Boolean(document.fullscreenElement))
 
@@ -34,7 +36,21 @@ const isFullscreen = ref(Boolean(document.fullscreenElement))
  * 和菜单里「不做假页面」的原则自相矛盾，而且会让人以为有 3 条待办。
  */
 const { alertTotal, load: loadAlertCount } = useInventoryAlertCount()
-onMounted(loadAlertCount)
+onMounted(initializeHeader)
+
+async function initializeHeader() {
+  await Promise.all([loadAlertCount(), loadWarehouseOptions()])
+  const exists = warehouseOptions.value.some((item) => item.value === app.currentWarehouseId)
+  if (!exists && warehouseOptions.value.length) {
+    app.setCurrentWarehouse(warehouseOptions.value[0].value)
+  }
+}
+
+function handleWarehouseChange(id) {
+  app.setCurrentWarehouse(id)
+  const current = warehouseOptions.value.find((item) => item.value === id)
+  ElMessage.success(`已切换到 ${current?.label || '当前仓库'}`)
+}
 
 function goAlerts() {
   router.push('/inventory/alerts')
@@ -162,6 +178,16 @@ async function handleLogout() {
           </span>
         </template>
       </nav>
+      <span class="header__divider"></span>
+      <el-select
+        :model-value="app.currentWarehouseId"
+        class="warehouse-switch"
+        placeholder="选择仓库"
+        filterable
+        @change="handleWarehouseChange"
+      >
+        <el-option v-for="item in warehouseOptions" :key="item.value" :label="item.label" :value="item.value" />
+      </el-select>
     </div>
 
     <div class="header__right">
@@ -309,6 +335,9 @@ async function handleLogout() {
   color: var(--text-primary);
 }
 
+.warehouse-switch {
+  width: 180px;
+}
 .header__divider {
   width: 1px;
   height: 22px;
@@ -371,10 +400,15 @@ async function handleLogout() {
 }
 
 @media (max-width: 720px) {
+  .warehouse-switch {
+    width: 132px;
+  }
+
   .breadcrumb,
   .profile__meta,
   .header__badge {
     display: none;
   }
 }
+
 </style>

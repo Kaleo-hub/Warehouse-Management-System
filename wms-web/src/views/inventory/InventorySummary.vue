@@ -4,6 +4,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { inventoryApi } from '@/api/inventory'
 import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
+import { useAppStore } from '@/stores/app'
 import { ZONE_TYPE_TAG } from '@/constants/options'
 import { toastError } from '@/utils/error'
 
@@ -16,9 +17,10 @@ import { toastError } from '@/utils/error'
 const loading = ref(false)
 const rows = ref([])
 const dimension = ref('WAREHOUSE')
-const warehouseId = ref(null)
+const warehouseId = ref(app.currentWarehouseId)
 
 const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions()
+const app = useAppStore()
 
 const DIMENSIONS = [
   { label: '按仓库', value: 'WAREHOUSE' },
@@ -65,6 +67,8 @@ async function load() {
     loading.value = false
   }
 }
+
+watch(() => app.currentWarehouseId, (id) => { warehouseId.value = id })
 
 watch([dimension, warehouseId], load)
 onMounted(async () => { await loadWarehouses(); await load() })

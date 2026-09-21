@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { inventoryApi } from '@/api/inventory'
+import { useAppStore } from '@/stores/app'
 import { toastError } from '@/utils/error'
 
 /**
@@ -22,6 +23,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+const app = useAppStore()
 
 const options = ref([])
 const loading = ref(false)
@@ -43,6 +45,7 @@ async function search() {
       page: 1,
       size: 50,
       keyword: keyword.value.trim() || undefined,
+      warehouseId: app.currentWarehouseId || undefined,
     })
 
     const list = (data?.records ?? []).filter((row) =>
@@ -64,6 +67,8 @@ async function search() {
 }
 
 onMounted(search)
+
+watch(() => app.currentWarehouseId, search)
 
 // 外部把选中的行换掉（比如从别的页面深链过来）时，保证它在下拉里可见
 watch(

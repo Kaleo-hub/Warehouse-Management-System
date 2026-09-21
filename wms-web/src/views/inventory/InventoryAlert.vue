@@ -4,6 +4,7 @@ import { WarningFilled } from '@element-plus/icons-vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { inventoryApi } from '@/api/inventory'
 import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
+import { useAppStore } from '@/stores/app'
 import { toastError } from '@/utils/error'
 
 /**
@@ -16,10 +17,11 @@ import { toastError } from '@/utils/error'
 const loading = ref(false)
 const alerts = ref({ expiring: [], frozen: [], overCapacity: [], expireDays: 30 })
 const activeTab = ref('expiring')
-const expireDays = ref(30)
-const warehouseId = ref(null)
+const expireDays = ref(app.alertDays)
+const warehouseId = ref(app.currentWarehouseId)
 
 const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions()
+const app = useAppStore()
 
 const counts = computed(() => ({
   expiring: alerts.value.expiring?.length || 0,
@@ -60,6 +62,11 @@ async function load() {
     loading.value = false
   }
 }
+
+watch([() => app.currentWarehouseId, () => app.alertDays], ([warehouse, days]) => {
+  warehouseId.value = warehouse
+  expireDays.value = days
+})
 
 watch([expireDays, warehouseId], load)
 onMounted(async () => { await loadWarehouses(); await load() })

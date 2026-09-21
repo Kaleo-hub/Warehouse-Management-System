@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight, Refresh, WarningFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { useAppStore } from '@/stores/app'
 import { inventoryApi } from '@/api/inventory'
 import { roleLabel } from '@/utils/format'
 import { TX_TYPE } from '@/constants/inbound'
@@ -11,6 +12,7 @@ import { toastError } from '@/utils/error'
 
 const router = useRouter()
 const auth = useAuthStore()
+const app = useAppStore()
 
 const loading = ref(false)
 const summary = ref(null)
@@ -120,9 +122,9 @@ async function load() {
   loadError.value = ''
   try {
     const [s, a, tx] = await Promise.all([
-      inventoryApi.summary(),
-      inventoryApi.alerts({ expireDays: 30 }),
-      inventoryApi.transactions({ page: 1, size: 8 }),
+      inventoryApi.summary({ warehouseId: app.currentWarehouseId || undefined }),
+      inventoryApi.alerts({ expireDays: app.alertDays, warehouseId: app.currentWarehouseId || undefined }),
+      inventoryApi.transactions({ page: 1, size: 8, warehouseId: app.currentWarehouseId || undefined }),
     ])
     summary.value = s
     alerts.value = a
@@ -136,6 +138,8 @@ async function load() {
 }
 
 function go(to) { if (to) router.push(to) }
+
+watch([() => app.currentWarehouseId, () => app.alertDays], load)
 
 onMounted(load)
 </script>

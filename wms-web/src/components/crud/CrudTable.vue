@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { toastError } from '@/utils/error'
 import { Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
+import { useAppStore } from '@/stores/app'
 
 /**
  * 通用 CRUD 容器：查询栏 + 工具栏 + 表格 + 分页 + 表单抽屉。
@@ -40,6 +41,8 @@ const props = defineProps({
 
 const emit = defineEmits(['loaded', 'row-click'])
 
+const app = useAppStore()
+
 /* ------------------------------ 查询 ------------------------------ */
 
 /**
@@ -68,13 +71,13 @@ function buildQuery() {
         ? preset
         : field.type === 'daterange'
           ? null
-          : (field.defaultValue ?? '')
+          : (field.defaultValue ?? (field.prop === 'warehouseId' ? (app.currentWarehouseId || '') : ''))
   })
   return query
 }
 
 const query = reactive(buildQuery())
-const page = reactive({ current: 1, size: 10, total: 0 })
+const page = reactive({ current: 1, size: app.pageSize, total: 0 })
 const rows = ref([])
 const loading = ref(false)
 
@@ -137,6 +140,29 @@ function handleSizeChange(size) {
   page.current = 1
   load()
 }
+
+/**
+ * 顶栏切换当前仓库时，带 warehouseId 筛选的通用列表自动跟随并重查。
+ * 用户仍然可以在页面里临时选择另一个仓库；下一次顶栏切换会再次覆盖为全局值。
+ */
+watch(
+  () => app.currentWarehouseId,
+  (id) => {
+    if (!props.searchFields.some((field) => field.prop === 'warehouseId')) return
+    query.warehouseId = id || ''
+    page.current = 1
+    load()
+  },
+)
+
+watch(
+  () => app.pageSize,
+  (size) => {
+    page.size = size
+    page.current = 1
+    load()
+  },
+)
 
 function handlePageChange(current) {
   page.current = current

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { triggerDownload } from '@/utils/format'
@@ -7,10 +7,14 @@ import { toastError } from '@/utils/error'
 import CrudTable from '@/components/crud/CrudTable.vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { inventoryApi } from '@/api/inventory'
+import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
 import { TX_TYPE, TX_TYPE_OPTIONS } from '@/constants/inbound'
 
 /** CrudTable 需要 { page } 形状，这里只做一层适配；保持对象引用稳定 */
 const transactionApi = { page: (params) => inventoryApi.transactions(params) }
+const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions()
+onMounted(loadWarehouses)
+
 
 const columns = [
   { prop: 'txNo', label: '流水号', width: 195, mono: true },
@@ -29,6 +33,7 @@ const columns = [
 
 const searchFields = [
   { prop: 'keyword', label: '关键字', placeholder: 'SKU / 商品名 / 流水号' },
+  { prop: 'warehouseId', label: '仓库', type: 'select', options: warehouseOptions.value },
   { prop: 'txType', label: '变动类型', type: 'select', options: TX_TYPE_OPTIONS },
   { prop: 'sourceNo', label: '来源单号', placeholder: '入库单号 / 出库单号' },
   {

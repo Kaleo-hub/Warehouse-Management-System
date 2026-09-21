@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAppStore } from '@/stores/app'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import LineItemsEditor from '@/components/form/LineItemsEditor.vue'
@@ -21,6 +22,7 @@ const router = useRouter()
 const formRef = ref(null)
 const itemsRef = ref(null)
 const submitting = ref(false)
+const app = useAppStore()
 /** 幂等键：同一次创建动作只建一张单，理由见 InboundOrderCreate */
 const idempotentKey = useIdempotentKey()
 
@@ -28,7 +30,7 @@ const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions(
 const { options: skuOptions, load: loadSkus } = useSkuOptions()
 
 const form = reactive({
-  warehouseId: null,
+  warehouseId: app.currentWarehouseId,
   /** 客户：同入库单，存主数据 id，名称由后端取快照 */
   customerId: undefined,
   receiveAddress: '',
@@ -44,6 +46,10 @@ const rules = {
 const totalQty = computed(() =>
   form.items.reduce((sum, row) => sum + (Number(row.qty) || 0), 0),
 )
+
+watch(() => app.currentWarehouseId, (id) => {
+  if (id && !form.warehouseId) form.warehouseId = id
+})
 
 onMounted(async () => {
   await Promise.all([loadWarehouses(), loadSkus()])
