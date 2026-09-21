@@ -32,6 +32,12 @@ public class OutboundOrder {
     /** OutboundStatus 枚举名 */
     private String status;
 
+    /** 红冲的原单ID（本单是它的反向单时才有值） */
+    private Long reverseOfId;
+
+    /** 被哪张红冲单冲掉的（原单上才有值） */
+    private Long reversedById;
+
     /** 需求总数量 */
     private Integer totalQty;
 

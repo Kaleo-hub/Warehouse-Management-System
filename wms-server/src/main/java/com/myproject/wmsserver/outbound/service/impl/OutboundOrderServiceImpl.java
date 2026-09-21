@@ -1,5 +1,6 @@
 package com.myproject.wmsserver.outbound.service.impl;
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.myproject.wmsserver.basedata.service.LocationService;
 import com.myproject.wmsserver.basedata.service.ProductService;
@@ -488,5 +489,89 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
         }
         // 名称以主数据为准
         return partner.getName();
+    }
+
+    /* ============================ 红冲（BR-011） ============================ */
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long reverse(Long originalOrderId) {
+        OutboundOrder original = orderMapper.selectForUpdate(originalOrderId);
+        if (original == null) {
+            throw new BizException(CommonErrorCode.RESOURCE_NOT_FOUND);
+        }
+        // 只有已发货的能红冲。草稿/已取消的没有「冲」的意义，已红冲的不能再冲一次
+        if (!OutboundStatus.of(original.getStatus()).canReverse()) {
+            log.warn("单据状态不允许红冲 orderNo={} status={}", original.getOrderNo(), original.getStatus());
+            throw new BizException(OutboundErrorCode.STATUS_NOT_ALLOWED);
+        }
+        if (original.getReversedById() != null) {
+            log.warn("单据已被红冲 orderNo={} reversedById={}", original.getOrderNo(), original.getReversedById());
+            throw new BizException(OutboundErrorCode.STATUS_NOT_ALLOWED);
+        }
+
+        /*
+         * ① 建红冲单。
+         * 红冲单不是「新的一单货」，而是原单的镜像：它记录「这批货退回来了」。
+         * 用 INSERT ... SELECT 复制，明细单独复制一次。
+         */
+        String reverseOrderNo = sequenceService.nextNo(BIZ_TYPE, ORDER_NO_PREFIX);
+        int copied = orderMapper.copyAsReverseOrder(reverseOrderNo, originalOrderId, UserContext.getUserId());
+        if (copied == 0) {
+            throw new BizException(CommonErrorCode.RESOURCE_NOT_FOUND);
+        }
+        // INSERT ... SELECT 不回传自增主键，所以按单号把新单查回来（单号上有唯一索引）
+        OutboundOrder reverseOrder = orderMapper.selectOne(Wrappers.<OutboundOrder>lambdaQuery()
+                .eq(OutboundOrder::getOrderNo, reverseOrderNo));
+        if (reverseOrder == null) {
+            throw new BizException(CommonErrorCode.SYSTEM_ERROR);
+        }
+        orderMapper.copyItemsAsReverse(reverseOrder.getId(), originalOrderId);
+
+        /*
+         * ② 把货退回来。
+         * 发货时做的是 qty -n / locked -n，红冲只加回 qty —— 不再动 locked：
+         * 那笔锁定在发货时已经核销掉了，红冲只是把实物数量加回来。
+         * 每一行都走 applyChange（库存唯一写入口），所以锁、CAS、流水一样都不少。
+         */
+        List<OutboundAllocate> allocates =
+                allocateMapper.selectByOrderIdAndStatus(originalOrderId, AllocateStatus.PICKED.name());
+        if (allocates.isEmpty()) {
+            // 理论上不可能：发货过的单据一定有 PICKED 分配。真出现说明数据被改过
+            log.warn("红冲时找不到已拣货的分配记录 orderNo={}", original.getOrderNo());
+            throw new BizException(OutboundErrorCode.NO_ALLOCATION_TO_PICK);
+        }
+
+        for (OutboundAllocate allocate : allocates) {
+            int qty = nz(allocate.getAllocatedQty());
+            inventoryService.applyChange(InventoryChangeCommand.builder()
+                    .warehouseId(allocate.getWarehouseId())
+                    .locationId(allocate.getLocationId())
+                    .skuId(allocate.getSkuId())
+                    .batchNo(allocate.getBatchNo())
+                    .qtyChange(qty)
+                    .txType(InventoryTxType.OUTBOUND_REVERSE)
+                    .sourceType(SOURCE_OUTBOUND)
+                    .sourceId(reverseOrder.getId())
+                    .sourceNo(reverseOrderNo)
+                    .remark("出库红冲：" + original.getOrderNo())
+                    .createIfAbsent(false)
+                    .build());
+        }
+
+        /*
+         * ③ 标记原单已被红冲。CAS 带 status='SHIPPED'：
+         * 并发两个红冲请求只有一个能改成功，另一个在这里被挡掉
+         * （uk_reverse_of 唯一索引是第二道防线）。
+         */
+        int reversed = orderMapper.markReversed(originalOrderId, reverseOrder.getId(), UserContext.getUserId());
+        if (reversed == 0) {
+            log.warn("标记红冲失败（状态已变）orderNo={}", original.getOrderNo());
+            throw new BizException(OutboundErrorCode.STATUS_NOT_ALLOWED);
+        }
+
+        log.info("出库红冲完成 原单={} 红冲单={} 退回 {} 条分配",
+                original.getOrderNo(), reverseOrderNo, allocates.size());
+        return reverseOrder.getId();
     }
 }

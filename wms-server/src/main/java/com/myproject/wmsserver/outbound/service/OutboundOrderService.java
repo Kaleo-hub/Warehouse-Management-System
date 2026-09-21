@@ -41,6 +41,16 @@ public interface OutboundOrderService {
     void ship(Long orderId);
 
     /**
+     * 红冲（BR-011）：已发货的单据不可撤销，只能开反向单。
+     *
+     * 会做三件事：建一张红冲单、把货按原路退回来（库存 +qty 并写 OUTBOUND_REVERSE 流水）、
+     * 把原单标记为 REVERSED。整个过程一个事务，不会出现「单建了货没回来」。
+     *
+     * @return 新建的红冲单 id
+     */
+    Long reverse(Long originalOrderId);
+
+    /**
      * 拣货完成回调（由 StockTaskService 调用）。
      * 累加分配合明细的已拣数量；整单全部拣完则把单据推进到 PICKED。
      */

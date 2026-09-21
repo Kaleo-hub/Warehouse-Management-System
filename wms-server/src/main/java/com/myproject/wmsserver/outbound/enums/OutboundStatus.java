@@ -32,6 +32,15 @@ public enum OutboundStatus {
     /** 已发货，库存已核销 */
     SHIPPED,
 
+    /**
+     * 已被红冲：这张单发出去的货，已经被一张反向单退回来了。
+     *
+     * 【为什么不改成 CANCELLED】「取消」的含义是「这事没发生过」，
+     * 而这张单确实发过货。改成 CANCELLED 会抹掉历史，
+     * 所以单独给它一个状态：发生过，但已被反向单冲平。
+     */
+    REVERSED,
+
     /** 已关闭（收尾状态） */
     CLOSED,
 
@@ -55,6 +64,11 @@ public enum OutboundStatus {
     /** 全部拣完才能发货 */
     public boolean canShip() {
         return this == PICKED;
+    }
+
+    /** 只有已发货的单能被红冲（BR-011：已发货不可撤销，只能开反向单） */
+    public boolean canReverse() {
+        return this == SHIPPED;
     }
 
     /** 只有还没分配、也没拣货的能取消 */

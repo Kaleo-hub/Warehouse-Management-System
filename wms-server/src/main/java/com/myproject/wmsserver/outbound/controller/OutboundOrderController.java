@@ -92,6 +92,15 @@ public class OutboundOrderController {
     }
 
     /** 取消：只有 CREATED 允许 */
+    /**
+     * 红冲：已发货的单据不可撤销，只能开反向单（BR-011）。
+     * data 返回新建的红冲单 id。
+     */
+    @PostMapping("/{id}/reverse")
+    public Result<Long> reverse(@PathVariable Long id) {
+        return Result.success(outboundOrderService.reverse(id));
+    }
+
     @PostMapping("/{id}/cancel")
     public Result<Void> cancel(@PathVariable Long id) {
         outboundOrderService.cancel(id);

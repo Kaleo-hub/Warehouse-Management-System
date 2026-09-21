@@ -18,7 +18,16 @@ public enum InventoryTxType {
     TRANSFER_OUT("移库转出"),
     TRANSFER_IN("移库转入"),
     STOCKTAKING_GAIN("盘盈"),
-    STOCKTAKING_LOSS("盘亏");
+    STOCKTAKING_LOSS("盘亏"),
+
+    /**
+     * 出库红冲：已发货的单据被反向单冲掉，货退回仓库。
+     *
+     * 【为什么不复用 PUTAWAY_IN】虽然都是「库存 +n」，业务含义完全不同：
+     * 上架是入库流程的收口，红冲是纠错。混在一起以后查流水就分不清
+     * 「这批货是正常进来的还是退回来的」。
+     */
+    OUTBOUND_REVERSE("出库红冲");
 
     // 【这里没有 RECONCILE_FIX，是刻意的】
     // 对账修正的是「余额」这个派生值，不是一次库存变动 —— 没有货进出仓库。

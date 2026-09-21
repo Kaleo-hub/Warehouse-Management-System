@@ -43,6 +43,29 @@ public interface OutboundOrderMapper extends BaseMapper<OutboundOrder> {
     int cancel(@Param("id") Long id, @Param("updateBy") Long updateBy);
 
     /**
+     * 复制原单表头，生成红冲单。用 INSERT ... SELECT 直接在库里复制，
+     * 不把原单读进内存再拼一遍（那样字段一多就容易漏）。
+     *
+     * 红冲单状态直接给 SHIPPED：货已经回来了，这张单在业务上已经完成，
+     * 它存在的意义就是记账和留痕。
+     */
+    int copyAsReverseOrder(@Param("newOrderNo") String newOrderNo,
+                           @Param("originalId") Long originalId,
+                           @Param("createBy") Long createBy);
+
+    /** 复制原单明细到红冲单 */
+    int copyItemsAsReverse(@Param("newOrderId") Long newOrderId,
+                           @Param("originalId") Long originalId);
+
+    /**
+     * 把原单标记为「已被红冲」。CAS 带 status='SHIPPED'，
+     * 并发时只有一个能成功；再配上 uk_reverse_of 唯一索引，双保险。
+     */
+    int markReversed(@Param("id") Long id,
+                     @Param("reversedById") Long reversedById,
+                     @Param("updateBy") Long updateBy);
+
+    /**
      * 该出库单下还有没有未完成的拣货任务。
      * 释放分配前必须检查 —— 否则已经把锁定还回去了，作业员还拿着老任务去拣货。
      *
