@@ -2,6 +2,7 @@ package com.myproject.wmsserver.inventory.vo;
 
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -45,4 +46,10 @@ public class InventoryVO {
 
     /** 首次入库时间，FIFO 靠它排序 */
     private LocalDateTime inboundTime;
+
+    /** 生产日期：上架时从入库明细带过来，出库 FIFO 的次级排序和临期预警都用它 */
+    private LocalDate productionDate;
+
+    /** 到期日期：临期预警用它算还剩多少天 */
+    private LocalDate expiryDate;
 }

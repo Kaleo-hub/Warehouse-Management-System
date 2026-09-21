@@ -21,9 +21,11 @@
     <!-- 确保库存行存在：不存在就插一条 0 库存，已存在则空更新（只为拿锁） -->
     <insert id="ensureRow">
         INSERT INTO inventory (warehouse_id, location_id, sku_id, batch_no,
-                               qty, locked_qty, frozen_qty, version, inbound_time, deleted)
+                               qty, locked_qty, frozen_qty, version,
+                               production_date, expiry_date, inbound_time, deleted)
         VALUES (#{warehouseId}, #{locationId}, #{skuId}, #{batchNo},
-                0, 0, 0, 0, NOW(3), 0)
+                0, 0, 0, 0,
+                #{productionDate}, #{expiryDate}, NOW(3), 0)
         ON DUPLICATE KEY UPDATE id = id
     </insert>
 
@@ -103,7 +105,9 @@
                i.locked_qty,
                i.frozen_qty,
                i.available_qty,
-               i.inbound_time
+               i.inbound_time,
+               i.production_date,
+               i.expiry_date
         FROM inventory i
                  LEFT JOIN warehouse w ON w.id = i.warehouse_id AND w.deleted = 0
                  LEFT JOIN location l ON l.id = i.location_id AND l.deleted = 0
@@ -129,4 +133,212 @@
         ORDER BY i.id DESC
     </select>
 
+    <!-- ==================== 汇总 / 预警（看板用） ==================== -->
+
+    <!--
+      库存侧聚合。
+      加 qty > 0 是有意的：CHECK 约束保证 qty=0 时 locked/frozen 也一定是 0，
+      所以过滤掉空行不影响任何合计数，还能让 COUNT(DISTINCT sku_id) 更准
+      （不然"曾经有过货、现在清零"的 SKU 也会被算进去）。
+    -->
+    <select id="selectInventoryAggregate" resultType="com.myproject.wmsserver.inventory.vo.InventorySummaryVO">
+        SELECT COALESCE(SUM(i.qty), 0)           AS total_qty,
+               COALESCE(SUM(i.locked_qty), 0)    AS locked_qty,
+               COALESCE(SUM(i.frozen_qty), 0)    AS frozen_qty,
+               COALESCE(SUM(i.available_qty), 0) AS available_qty,
+               COUNT(DISTINCT i.sku_id)          AS sku_count,
+               COUNT(DISTINCT i.location_id)     AS used_location_count
+        FROM inventory i
+        WHERE i.deleted = 0
+          AND i.qty &gt; 0
+        <if test="warehouseId != null">
+            AND i.warehouse_id = #{warehouseId}
+        </if>
+    </select>
+
+    <!--
+      库位容量聚合。
+      location_count 统计【所有启用库位】，但容量合计只累加 capacity > 0 的
+      —— capacity=0 表示不限容量（临时暂存位），把它算进分母会让占用率失真。
+    -->
+    <select id="selectLocationCapacityAggregate" resultType="com.myproject.wmsserver.inventory.vo.InventorySummaryVO">
+        SELECT COUNT(*) AS location_count,
+               COALESCE(SUM(CASE WHEN l.capacity &gt; 0 THEN l.capacity ELSE 0 END), 0)      AS capacity_total,
+               COALESCE(SUM(CASE WHEN l.capacity &gt; 0 THEN l.used_capacity ELSE 0 END), 0) AS capacity_used
+        FROM location l
+        WHERE l.deleted = 0
+          AND l.status = 'ENABLED'
+        <if test="warehouseId != null">
+            AND l.warehouse_id = #{warehouseId}
+        </if>
+    </select>
+
+    <!--
+      待处理数：一条 SQL 带三个标量子查询。
+      「待处理任务」= 还没到终态的任务；「待收货入库单」= CREATED/RECEIVING；
+      「待处理出库单」= 还没发货的（CREATED/ALLOCATED/PICKING）。
+    -->
+    <select id="selectPendingCounts" resultType="com.myproject.wmsserver.inventory.vo.InventorySummaryVO">
+        SELECT (SELECT COUNT(*) FROM stock_task
+                 WHERE deleted = 0 AND status NOT IN ('DONE', 'CANCELLED'))            AS pending_task_count,
+               (SELECT COUNT(*) FROM inbound_order
+                 WHERE deleted = 0 AND status IN ('CREATED', 'RECEIVING'))             AS pending_inbound_count,
+               (SELECT COUNT(*) FROM outbound_order
+                 WHERE deleted = 0 AND status IN ('CREATED', 'ALLOCATED', 'PICKING'))  AS pending_outbound_count
+    </select>
+
+    <!-- ========== 三个维度的汇总 ========== -->
+
+    <select id="selectGroupByWarehouse" resultType="com.myproject.wmsserver.inventory.vo.InventoryGroupVO">
+        SELECT i.warehouse_id             AS group_id,
+               w.code                     AS group_code,
+               w.name                     AS group_name,
+               SUM(i.qty)                 AS qty,
+               SUM(i.locked_qty)          AS locked_qty,
+               SUM(i.frozen_qty)          AS frozen_qty,
+               SUM(i.available_qty)       AS available_qty,
+               COUNT(DISTINCT i.sku_id)   AS sku_count,
+               COUNT(DISTINCT i.location_id) AS location_count
+        FROM inventory i
+                 LEFT JOIN warehouse w ON w.id = i.warehouse_id AND w.deleted = 0
+        WHERE i.deleted = 0
+          AND i.qty &gt; 0
+        <if test="warehouseId != null">
+            AND i.warehouse_id = #{warehouseId}
+        </if>
+        GROUP BY i.warehouse_id, w.code, w.name
+        ORDER BY qty DESC
+    </select>
+
+    <select id="selectGroupByZone" resultType="com.myproject.wmsserver.inventory.vo.InventoryGroupVO">
+        SELECT l.zone_id                  AS group_id,
+               z.code                     AS group_code,
+               z.name                     AS group_name,
+               z.zone_type                AS group_type,
+               w.name                     AS parent_name,
+               SUM(i.qty)                 AS qty,
+               SUM(i.locked_qty)          AS locked_qty,
+               SUM(i.frozen_qty)          AS frozen_qty,
+               SUM(i.available_qty)       AS available_qty,
+               COUNT(DISTINCT i.sku_id)   AS sku_count,
+               COUNT(DISTINCT i.location_id) AS location_count
+        FROM inventory i
+                 JOIN location l ON l.id = i.location_id
+                 LEFT JOIN zone z ON z.id = l.zone_id
+                 LEFT JOIN warehouse w ON w.id = i.warehouse_id AND w.deleted = 0
+        WHERE i.deleted = 0
+          AND i.qty &gt; 0
+        <if test="warehouseId != null">
+            AND i.warehouse_id = #{warehouseId}
+        </if>
+        GROUP BY l.zone_id, z.code, z.name, z.zone_type, w.name
+        ORDER BY qty DESC
+    </select>
+
+    <select id="selectGroupBySku" resultType="com.myproject.wmsserver.inventory.vo.InventoryGroupVO">
+        SELECT i.sku_id                   AS group_id,
+               p.sku_code                 AS group_code,
+               p.name                     AS group_name,
+               SUM(i.qty)                 AS qty,
+               SUM(i.locked_qty)          AS locked_qty,
+               SUM(i.frozen_qty)          AS frozen_qty,
+               SUM(i.available_qty)       AS available_qty,
+               COUNT(DISTINCT i.sku_id)   AS sku_count,
+               COUNT(DISTINCT i.location_id) AS location_count
+        FROM inventory i
+                 LEFT JOIN product p ON p.id = i.sku_id
+        WHERE i.deleted = 0
+          AND i.qty &gt; 0
+        <if test="warehouseId != null">
+            AND i.warehouse_id = #{warehouseId}
+        </if>
+        GROUP BY i.sku_id, p.sku_code, p.name
+        ORDER BY qty DESC
+    </select>
+
+    <!-- ========== 三类预警 ========== -->
+
+    <!--
+      临期预警：到期日在 N 天内（含已经过期的，days_to_expire 会是负数）。
+      生产日期/到期日期为 NULL 的不算 —— 那是没登记效期的货，不该报"临期"。
+    -->
+    <select id="selectExpiringAlerts" resultType="com.myproject.wmsserver.inventory.vo.InventoryAlertVO$ExpiryAlert">
+        SELECT i.id              AS inventory_id,
+               i.warehouse_id    AS warehouse_id,
+               w.name            AS warehouse_name,
+               l.code            AS location_code,
+               p.sku_code        AS sku_code,
+               p.name            AS sku_name,
+               i.batch_no        AS batch_no,
+               i.qty             AS qty,
+               i.production_date AS production_date,
+               i.expiry_date     AS expiry_date,
+               DATEDIFF(i.expiry_date, CURDATE()) AS days_to_expire
+        FROM inventory i
+                 LEFT JOIN warehouse w ON w.id = i.warehouse_id AND w.deleted = 0
+                 LEFT JOIN location l ON l.id = i.location_id
+                 LEFT JOIN product p ON p.id = i.sku_id
+        WHERE i.deleted = 0
+          AND i.qty &gt; 0
+          AND i.expiry_date IS NOT NULL
+          AND i.expiry_date &lt;= DATE_ADD(CURDATE(), INTERVAL #{expireDays} DAY)
+        <if test="warehouseId != null">
+            AND i.warehouse_id = #{warehouseId}
+        </if>
+        ORDER BY i.expiry_date ASC, i.id ASC
+        LIMIT 200
+    </select>
+
+    <!-- 冻结预警：有冻结量的库存行。按冻结量倒序，冻得多的排前面 -->
+    <select id="selectFrozenAlerts" resultType="com.myproject.wmsserver.inventory.vo.InventoryAlertVO$FrozenAlert">
+        SELECT i.id           AS inventory_id,
+               i.warehouse_id AS warehouse_id,
+               w.name         AS warehouse_name,
+               l.code         AS location_code,
+               p.sku_code     AS sku_code,
+               p.name         AS sku_name,
+               i.batch_no     AS batch_no,
+               i.qty          AS qty,
+               i.frozen_qty   AS frozen_qty,
+               i.available_qty AS available_qty
+        FROM inventory i
+                 LEFT JOIN warehouse w ON w.id = i.warehouse_id AND w.deleted = 0
+                 LEFT JOIN location l ON l.id = i.location_id
+                 LEFT JOIN product p ON p.id = i.sku_id
+        WHERE i.deleted = 0
+          AND i.frozen_qty &gt; 0
+        <if test="warehouseId != null">
+            AND i.warehouse_id = #{warehouseId}
+        </if>
+        ORDER BY i.frozen_qty DESC, i.id ASC
+        LIMIT 200
+    </select>
+
+    <!--
+      超容预警：已用容量超过容量上限的库位。
+      正常流程下不该出现（上架时会做容量校验），所以这条是"数据自检"，
+      一旦有数据说明哪里绕过了校验，需要人工核对。
+    -->
+    <select id="selectOverCapacityAlerts" resultType="com.myproject.wmsserver.inventory.vo.InventoryAlertVO$CapacityAlert">
+        SELECT l.id             AS location_id,
+               l.warehouse_id   AS warehouse_id,
+               w.name           AS warehouse_name,
+               z.name           AS zone_name,
+               l.code           AS location_code,
+               l.name           AS location_name,
+               l.capacity       AS capacity,
+               l.used_capacity  AS used_capacity,
+               (l.used_capacity - l.capacity) AS over_qty
+        FROM location l
+                 LEFT JOIN warehouse w ON w.id = l.warehouse_id AND w.deleted = 0
+                 LEFT JOIN zone z ON z.id = l.zone_id
+        WHERE l.deleted = 0
+          AND l.capacity &gt; 0
+          AND l.used_capacity &gt; l.capacity
+        <if test="warehouseId != null">
+            AND l.warehouse_id = #{warehouseId}
+        </if>
+        ORDER BY over_qty DESC
+        LIMIT 200
+    </select>
 </mapper>

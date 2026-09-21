@@ -4,6 +4,8 @@ import com.myproject.wmsserver.inventory.enums.InventoryTxType;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDate;
+
 /**
  * applyChange 的入参。
  *
@@ -54,6 +56,17 @@ public class InventoryChangeCommand {
     private String operatorName;
 
     private String remark;
+
+    /**
+     * 生产日期 / 到期日期。
+     *
+     * 入库上架时从入库明细带过来，写进 inventory 表 —— 出库 FIFO 排序和
+     * 「临期预警」都要靠它们。只在【首次建库存行】时写入，后续变动不动它们
+     * （同一批货的生产日期不会变）。
+     */
+    private LocalDate productionDate;
+
+    private LocalDate expiryDate;
 
     /**
      * 库存行不存在时，是否自动创建一条 0 库存的记录。

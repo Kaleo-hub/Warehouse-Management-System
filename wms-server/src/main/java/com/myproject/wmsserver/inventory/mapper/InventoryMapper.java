@@ -4,8 +4,13 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.myproject.wmsserver.inventory.dto.InventoryQuery;
 import com.myproject.wmsserver.inventory.entity.Inventory;
+import com.myproject.wmsserver.inventory.vo.InventoryAlertVO;
+import com.myproject.wmsserver.inventory.vo.InventoryGroupVO;
+import com.myproject.wmsserver.inventory.vo.InventorySummaryVO;
 import com.myproject.wmsserver.inventory.vo.InventoryVO;
 import org.apache.ibatis.annotations.Param;
+
+import java.time.LocalDate;
 import java.util.List;
 
 public interface InventoryMapper extends BaseMapper<Inventory> {
@@ -25,7 +30,9 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
     int ensureRow(@Param("warehouseId") Long warehouseId,
                   @Param("locationId") Long locationId,
                   @Param("skuId") Long skuId,
-                  @Param("batchNo") String batchNo);
+                  @Param("batchNo") String batchNo,
+                  @Param("productionDate") LocalDate productionDate,
+                  @Param("expiryDate") LocalDate expiryDate);
 
     /**
      * 按业务唯一键查询并加排他锁（SELECT ... FOR UPDATE）。
@@ -67,4 +74,34 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
     /** 库存分页查询，带仓库名 / 库位编码 / 商品编码名称 */
     IPage<InventoryVO> selectInventoryPage(IPage<InventoryVO> page,
                                            @Param("query") InventoryQuery query);
+
+    /* ==================== 汇总 / 预警（看板用） ==================== */
+
+    /** 库存侧聚合：总在库/锁定/冻结/可用 + SKU 数 + 有货库位数 */
+    InventorySummaryVO selectInventoryAggregate(@Param("warehouseId") Long warehouseId);
+
+    /** 库位容量聚合：启用库位数 + 容量合计 + 已用合计（capacity=0 的不限位不计入合计） */
+    InventorySummaryVO selectLocationCapacityAggregate(@Param("warehouseId") Long warehouseId);
+
+    /**
+     * 待处理数：任务 / 入库单 / 出库单。
+     *
+     * 【跨模块只读投影】没有注入别的模块的 Mapper，是本模块自己发一条
+     * 带标量子查询的 SELECT，属于「读投影」而不是「写别人的表」。
+     * 这样看板一次请求就够，不用调三个 Service 各查一遍。
+     */
+    InventorySummaryVO selectPendingCounts();
+
+    List<InventoryGroupVO> selectGroupByWarehouse(@Param("warehouseId") Long warehouseId);
+
+    List<InventoryGroupVO> selectGroupByZone(@Param("warehouseId") Long warehouseId);
+
+    List<InventoryGroupVO> selectGroupBySku(@Param("warehouseId") Long warehouseId);
+
+    List<InventoryAlertVO.ExpiryAlert> selectExpiringAlerts(@Param("expireDays") int expireDays,
+                                                            @Param("warehouseId") Long warehouseId);
+
+    List<InventoryAlertVO.FrozenAlert> selectFrozenAlerts(@Param("warehouseId") Long warehouseId);
+
+    List<InventoryAlertVO.CapacityAlert> selectOverCapacityAlerts(@Param("warehouseId") Long warehouseId);
 }

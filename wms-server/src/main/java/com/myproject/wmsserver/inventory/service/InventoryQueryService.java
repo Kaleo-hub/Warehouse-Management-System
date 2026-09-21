@@ -2,9 +2,13 @@ package com.myproject.wmsserver.inventory.service;
 
 import com.myproject.wmsserver.common.result.PageResult;
 import com.myproject.wmsserver.inventory.dto.InventoryQuery;
+import com.myproject.wmsserver.inventory.dto.SummaryQuery;
 import com.myproject.wmsserver.inventory.dto.TransactionQuery;
 import com.myproject.wmsserver.inventory.vo.InventoryTransactionVO;
 import com.myproject.wmsserver.inventory.entity.Inventory;
+import com.myproject.wmsserver.inventory.vo.InventoryAlertVO;
+import com.myproject.wmsserver.inventory.vo.InventoryGroupVO;
+import com.myproject.wmsserver.inventory.vo.InventorySummaryVO;
 import com.myproject.wmsserver.inventory.vo.InventoryVO;
 
 import java.util.List;
@@ -33,4 +37,19 @@ public interface InventoryQueryService {
      * 返回结果【没有加锁】，调用方必须通过 InventoryService.applyChange 去真正锁定。
      */
     List<Inventory> listFifoAvailable(Long warehouseId, Long skuId);
+
+    /**
+     * 库存总览（工作台看板）。可选只看某个仓库。
+     * 一次把库存聚合、库位容量、待处理数、按仓库分布都拼好。
+     */
+    InventorySummaryVO summary(Long warehouseId);
+
+    /**
+     * 分组合并汇总。dimension 取 WAREHOUSE / ZONE / SKU，非白名单值按 WAREHOUSE 处理。
+     * 用 switch 做白名单，不把前端传的字符串拼进 SQL。
+     */
+    List<InventoryGroupVO> groupedSummary(SummaryQuery query);
+
+    /** 三类预警：临期 / 冻结 / 库位超容 */
+    InventoryAlertVO alerts(SummaryQuery query);
 }

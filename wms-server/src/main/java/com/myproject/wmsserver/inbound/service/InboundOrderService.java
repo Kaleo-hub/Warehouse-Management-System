@@ -4,6 +4,7 @@ import com.myproject.wmsserver.common.result.PageResult;
 import com.myproject.wmsserver.inbound.dto.InboundOrderQuery;
 import com.myproject.wmsserver.inbound.dto.InboundOrderSaveDTO;
 import com.myproject.wmsserver.inbound.dto.InboundReceiveDTO;
+import com.myproject.wmsserver.inbound.vo.InboundOrderItemVO;
 import com.myproject.wmsserver.inbound.vo.InboundOrderVO;
 
 public interface InboundOrderService {
@@ -13,6 +14,15 @@ public interface InboundOrderService {
 
     /** 详情（含明细） */
     InboundOrderVO get(Long id);
+
+    /**
+     * 按 id 取单条明细。
+     *
+     * 给上架任务用：上架完成时要把明细上的生产日期/到期日期写进库存表，
+     * 「临期预警」和出库 FIFO 的次级排序都靠它们。
+     * 会校验明细确实属于该单据，避免拿错单的明细。
+     */
+    InboundOrderItemVO getItem(Long orderId, Long itemId);
 
     /** 创建入库单，返回新 id */
     Long create(InboundOrderSaveDTO dto);

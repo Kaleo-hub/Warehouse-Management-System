@@ -59,7 +59,8 @@ public class InventoryServiceImpl implements InventoryService {
         // 出库类变动传 createIfAbsent = false：没有库存行说明这个库位本来就没货，
         // 直接报库存不足，而不是先建一条 0 库存再失败（那样会留下垃圾数据）。
         if (command.isCreateIfAbsent()) {
-            inventoryMapper.ensureRow(warehouseId, locationId, skuId, batchNo);
+            inventoryMapper.ensureRow(warehouseId, locationId, skuId, batchNo,
+                    command.getProductionDate(), command.getExpiryDate());
         }
 
         // ---------- ② 锁行，拿当前值 ----------

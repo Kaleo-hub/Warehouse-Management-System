@@ -74,6 +74,16 @@ public class InboundOrderServiceImpl implements InboundOrderService {
         return vo;
     }
 
+    @Override
+    public InboundOrderItemVO getItem(Long orderId, Long itemId) {
+        InboundOrderItem item = itemMapper.selectById(itemId);
+        // 校验归属：别把别的单据的明细当成本单的
+        if (item == null || !orderId.equals(item.getOrderId())) {
+            return null;
+        }
+        return toItemVO(item);
+    }
+
     /* ============================ 建单 ============================ */
 
     @Override

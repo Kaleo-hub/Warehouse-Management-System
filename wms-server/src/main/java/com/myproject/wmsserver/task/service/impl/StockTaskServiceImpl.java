@@ -95,7 +95,8 @@ public class StockTaskServiceImpl implements StockTaskService {
             throw new BizException(InboundErrorCode.STATUS_NOT_ALLOWED);
         }
 
-        // 幂等：找出这张单已经派出去、还没做完的任务，它们覆盖的明细不再重复生成
+        // 幂等：找出这张单已
+        // 经派出去、还没做完的任务，它们覆盖的明细不再重复生成
         List<StockTask> existing = taskMapper.selectList(Wrappers.<StockTask>lambdaQuery()
                 .eq(StockTask::getSourceType, SOURCE_INBOUND)
                 .eq(StockTask::getSourceId, inboundOrderId)
@@ -298,6 +299,17 @@ public class StockTaskServiceImpl implements StockTaskService {
             throw new BizException(TaskErrorCode.TASK_TARGET_LOCATION_MISSING);
         }
 
+        /*
+         * 先把来源入库明细取出来。
+         * 目的是拿到生产日期/到期日期 —— 上架时要写进 inventory 表，
+         * 「临期预警」和出库 FIFO 的次级排序都要靠它们。
+         * 只在首次建库存行时写入（ensureRow 里 ON DUPLICATE KEY 不会覆盖）。
+         */
+        InboundOrderItemVO sourceItem = null;
+        if (SOURCE_INBOUND.equals(task.getSourceType()) && task.getSourceItemId() != null) {
+            sourceItem = inboundOrderService.getItem(task.getSourceId(), task.getSourceItemId());
+        }
+
         if (actualQty > 0) {
             inventoryService.applyChange(InventoryChangeCommand.builder()
                     .warehouseId(task.getWarehouseId())
@@ -311,6 +323,8 @@ public class StockTaskServiceImpl implements StockTaskService {
                     .sourceNo(task.getTaskNo())
                     .operatorName(task.getAssigneeName())
                     .remark("上架入库")
+                    .productionDate(sourceItem == null ? null : sourceItem.getProductionDate())
+                    .expiryDate(sourceItem == null ? null : sourceItem.getExpiryDate())
                     .build());
 
             // 和上一步在同一个事务里：容量不够会把库存一起回滚，
@@ -318,7 +332,7 @@ public class StockTaskServiceImpl implements StockTaskService {
             locationService.increaseUsedCapacity(task.getToLocationId(), actualQty);
         }
 
-        if (SOURCE_INBOUND.equals(task.getSourceType()) && task.getSourceItemId() != null) {
+        if (sourceItem != null) {
             inboundOrderService.onPutawayCompleted(task.getSourceId(), task.getSourceItemId(), actualQty);
         }
 
