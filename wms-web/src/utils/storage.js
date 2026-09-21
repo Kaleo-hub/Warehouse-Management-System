@@ -6,6 +6,7 @@ const TOKEN_KEY = 'wms:token'
 const USER_KEY = 'wms:user'
 const REMEMBER_KEY = 'wms:remember'
 const THEME_KEY = 'wms:theme'
+const MENU_GROUPS_KEY = 'wms:menuGroups'
 
 function read(key, fallback = null) {
   try {
@@ -75,6 +76,22 @@ export function getStoredTheme() {
 
 export function setStoredTheme(theme) {
   write(THEME_KEY, theme)
+}
+
+/* ---------- 侧边栏展开的模块 ---------- */
+export function getStoredMenuGroups() {
+  const raw = read(MENU_GROUPS_KEY)
+  if (!raw) return []
+  try {
+    const list = JSON.parse(raw)
+    return Array.isArray(list) ? list.filter((item) => typeof item === 'number') : []
+  } catch {
+    return []
+  }
+}
+
+export function setStoredMenuGroups(groups) {
+  write(MENU_GROUPS_KEY, JSON.stringify(groups))
 }
 
 /* ---------- 退出登录时统一清理 ---------- */

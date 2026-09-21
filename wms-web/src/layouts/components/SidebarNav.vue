@@ -1,8 +1,10 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { menuGroups } from '../menu'
 import { useAppStore } from '@/stores/app'
+import { getStoredMenuGroups, setStoredMenuGroups } from '@/utils/storage'
 
 const route = useRoute()
 const app = useAppStore()
@@ -11,11 +13,49 @@ const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.0'
 /** 移动端不做图标折叠，一律展开文字 */
 const collapsed = computed(() => !app.isMobile && app.sidebarCollapsed)
 
-/** 「基础数据」这类含当前路由的分组默认展开 */
-const openGroups = ref([])
+/**
+ * 侧边栏分组折叠。
+ *
+ * 【为什么要折叠】库存模块做完之后菜单有 6 个模块、17 个入口，
+ * 全部铺开要滚一屏，「找入口」比「点进去」还费劲。
+ * 折叠之后默认只展开「当前页所在的那个模块」，一屏能看全所有模块名。
+ *
+ * 状态存在 localStorage 里：手点开的分组刷新后还是开的，不用每次重新点。
+ * 路由变化时会自动把当前页所在的分组补进展开列表（但不会收起别人 ——
+ * 如果切个页面就把用户刚展开的分组关掉，那是帮倒忙）。
+ */
+const openGroups = ref(getStoredMenuGroups())
 
 function isActive(path) {
   return route.path === path || route.path.startsWith(path + '/')
+}
+
+function hasActiveItem(index) {
+  return menuGroups[index].items.some((item) => isActive(item.path))
+}
+
+/** 只有一个入口的分组（概览 / 系统）不折叠：折它没有意义，还多一次点击 */
+function isCollapsible(index) {
+  return menuGroups[index].items.length > 1
+}
+
+function isGroupOpen(index) {
+  // 图标条模式下没有分组标题可点，所有入口都要露出来
+  if (collapsed.value) return true
+  if (!isCollapsible(index)) return true
+  return openGroups.value.includes(index)
+}
+
+function persist() {
+  setStoredMenuGroups(openGroups.value)
+}
+
+function toggleGroup(index) {
+  if (!isCollapsible(index)) return
+  openGroups.value = openGroups.value.includes(index)
+    ? openGroups.value.filter((it) => it !== index)
+    : [...openGroups.value, index]
+  persist()
 }
 
 function syncOpenGroups() {
@@ -24,17 +64,7 @@ function syncOpenGroups() {
     if (group.items.some((item) => isActive(item.path))) next.add(index)
   })
   openGroups.value = [...next]
-}
-
-function toggleGroup(index) {
-  if (collapsed.value) {
-    app.sidebarCollapsed = false
-    openGroups.value = [...new Set([...openGroups.value, index])]
-    return
-  }
-  openGroups.value = openGroups.value.includes(index)
-    ? openGroups.value.filter((it) => it !== index)
-    : [...openGroups.value, index]
+  persist()
 }
 
 watch(
@@ -45,11 +75,6 @@ watch(
   },
   { immediate: true },
 )
-
-watch(collapsed, (value) => {
-  if (value) openGroups.value = []
-  else syncOpenGroups()
-})
 </script>
 
 <template>
@@ -92,32 +117,57 @@ watch(collapsed, (value) => {
     </div>
 
     <nav class="sidebar__nav">
-      <div v-for="group in menuGroups" :key="group.title" class="nav-group">
-        <p v-if="!collapsed" class="nav-group__title">{{ group.title }}</p>
-        <div v-else class="nav-group__divider"></div>
+      <div v-for="(group, index) in menuGroups" :key="group.title" class="nav-group">
+        <!-- 图标条模式没有文字，用一条分隔线代替分组标题 -->
+        <div v-if="collapsed" class="nav-group__divider"></div>
 
-        <template v-for="item in group.items" :key="item.path">
-          <router-link
-            v-if="!item.soon"
-            class="nav-item"
-            :class="{ 'is-active': isActive(item.path) }"
-            :to="item.path"
-            :title="collapsed ? item.title : undefined"
-          >
-            <el-icon class="nav-item__icon"><component :is="item.icon" /></el-icon>
-            <span v-if="!collapsed" class="nav-item__text">{{ item.title }}</span>
-          </router-link>
-
+        <!-- 可折叠：整行就是按钮，点标题展开 / 收起 -->
+        <button
+          v-else-if="isCollapsible(index)"
+          type="button"
+          class="nav-group__toggle"
+          :class="{ 'is-open': isGroupOpen(index) }"
+          :aria-expanded="isGroupOpen(index)"
+          @click="toggleGroup(index)"
+        >
+          <span class="nav-group__title">{{ group.title }}</span>
           <span
-            v-else
-            class="nav-item is-soon"
-            :title="collapsed ? `${item.title}（规划中）` : undefined"
-          >
-            <el-icon class="nav-item__icon"><component :is="item.icon" /></el-icon>
-            <span v-if="!collapsed" class="nav-item__text">{{ item.title }}</span>
-            <span v-if="!collapsed" class="nav-item__badge">规划中</span>
-          </span>
-        </template>
+            v-if="hasActiveItem(index) && !isGroupOpen(index)"
+            class="nav-group__dot"
+            aria-hidden="true"
+          ></span>
+          <el-icon class="nav-group__arrow"><ArrowDown /></el-icon>
+        </button>
+
+        <!-- 只有一个入口的分组：标题就是普通文字 -->
+        <p v-else class="nav-group__title nav-group__title--static">{{ group.title }}</p>
+
+        <el-collapse-transition>
+          <div v-show="isGroupOpen(index)" class="nav-group__items">
+            <template v-for="item in group.items" :key="item.path">
+              <router-link
+                v-if="!item.soon"
+                class="nav-item"
+                :class="{ 'is-active': isActive(item.path) }"
+                :to="item.path"
+                :title="collapsed ? item.title : undefined"
+              >
+                <el-icon class="nav-item__icon"><component :is="item.icon" /></el-icon>
+                <span v-if="!collapsed" class="nav-item__text">{{ item.title }}</span>
+              </router-link>
+
+              <span
+                v-else
+                class="nav-item is-soon"
+                :title="collapsed ? `${item.title}（规划中）` : undefined"
+              >
+                <el-icon class="nav-item__icon"><component :is="item.icon" /></el-icon>
+                <span v-if="!collapsed" class="nav-item__text">{{ item.title }}</span>
+                <span v-if="!collapsed" class="nav-item__badge">规划中</span>
+              </span>
+            </template>
+          </div>
+        </el-collapse-transition>
       </div>
     </nav>
 
@@ -212,22 +262,83 @@ watch(collapsed, (value) => {
 /* ---------- 导航 ---------- */
 .sidebar__nav {
   flex: 1 1 auto;
-  padding: 14px 10px;
+  padding: 12px 10px;
   overflow-x: hidden;
   overflow-y: auto;
 }
 
 .nav-group + .nav-group {
-  margin-top: 14px;
+  margin-top: 2px;
+}
+
+/* 分组标题既是标题也是按钮：整行可点，带一个箭头表示能不能展开 */
+.nav-group__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px 7px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.nav-group__toggle:hover .nav-group__title {
+  color: rgba(214, 226, 250, 0.92);
+}
+
+.nav-group__toggle:hover .nav-group__arrow {
+  opacity: 1;
 }
 
 .nav-group__title {
-  padding: 0 10px 7px;
+  flex: 1 1 auto;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.14em;
+  text-align: left;
   text-transform: uppercase;
   color: rgba(151, 163, 189, 0.62);
+  transition: color var(--duration-fast) var(--ease-in-out);
+}
+
+/* 单入口分组的标题：只是文字，不能点 */
+.nav-group__title--static {
+  display: block;
+  padding: 9px 10px 7px;
+}
+
+.nav-group__toggle.is-open .nav-group__title {
+  color: rgba(151, 163, 189, 0.86);
+}
+
+/* 收起状态但里面装着当前页时，给个圆点，免得「当前页去哪了」 */
+.nav-group__dot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+.nav-group__arrow {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: rgba(151, 163, 189, 0.7);
+  opacity: 0.55;
+  transition: transform var(--duration-base) var(--ease-in-out),
+    opacity var(--duration-fast) var(--ease-in-out);
+  transform: rotate(-90deg);
+}
+
+.nav-group__toggle.is-open .nav-group__arrow {
+  transform: rotate(0deg);
+}
+
+.nav-group__items {
+  overflow: hidden;
 }
 
 .nav-group__divider {
