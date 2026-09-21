@@ -25,27 +25,63 @@
       由调用方捕获后当成「已存在」处理 —— 那是最后一道保险。
     -->
     <insert id="tryInsert">
-        INSERT INTO idempotent_record (idempotent_key, biz_type, request_hash, status, expire_time)
-        SELECT #{key}, #{bizType}, #{requestHash}, 0, #{expireTime}
+        INSERT INTO idempotent_record (idempotent_key, biz_type, request_hash, status,
+                                       locked_until, expire_time)
+        SELECT #{key}, #{bizType}, #{requestHash}, 0,
+               #{lockedUntil}, #{expireTime}
         FROM DUAL
         WHERE NOT EXISTS (
             SELECT 1 FROM idempotent_record WHERE idempotent_key = #{key}
         )
     </insert>
 
+    <!--
+      接手一个租约过期的处理中记录（CAS）。
+      条件里必须同时有 status = 0 和租约过期：并发的两个重试只有一个能改成功。
+      locked_until IS NULL 也放行：那是 V1.0.3 之前留下的老记录（当时没有租约字段），
+      它们本来就已经卡住了，正好借这一步解开。
+    -->
+    <update id="preempt">
+        UPDATE idempotent_record
+        SET locked_until = #{lockedUntil},
+            request_hash = #{requestHash},
+            update_time  = NOW(3)
+        WHERE idempotent_key = #{key}
+          AND status = 0
+          AND (locked_until IS NULL OR locked_until &lt; NOW(3))
+    </update>
+
+    <!--
+      兜底：处理中且租约过期很久的记录直接标失败。
+      走 idx_status_locked(status, locked_until)。
+      「过期很久」用单独的阈值（默认 1 小时），比租约本身（30 秒）长得多 ——
+      免得刚过期的记录还没等人重试就被判了死刑。
+    -->
+    <update id="failStaleProcessing">
+        UPDATE idempotent_record
+        SET status       = 2,
+            error_msg    = #{errorMsg},
+            locked_until = NULL
+        WHERE status = 0
+          AND (locked_until IS NULL OR locked_until &lt; #{deadline})
+        LIMIT #{limit}
+    </update>
+
     <update id="markSuccess">
         UPDATE idempotent_record
         SET status          = 1,
             result_snapshot = #{snapshot},
-            error_msg       = NULL
+            error_msg       = NULL,
+            locked_until    = NULL
         WHERE idempotent_key = #{key}
           AND status = 0
     </update>
 
     <update id="markFailed">
         UPDATE idempotent_record
-        SET status    = 2,
-            error_msg = #{errorMsg}
+        SET status       = 2,
+            error_msg    = #{errorMsg},
+            locked_until = NULL
         WHERE idempotent_key = #{key}
           AND status = 0
     </update>
@@ -53,8 +89,9 @@
     <!-- 允许重试：只把「上一次失败」的改回处理中，其他状态不动 -->
     <update id="resetToProcessing">
         UPDATE idempotent_record
-        SET status    = 0,
-            error_msg = NULL
+        SET status       = 0,
+            locked_until = #{lockedUntil},
+            error_msg    = NULL
         WHERE idempotent_key = #{key}
           AND status = 2
           AND (expire_time IS NULL OR expire_time &gt; NOW(3))

@@ -31,6 +31,16 @@ public class IdempotentRecord {
     /** 0 处理中 / 1 成功 / 2 失败 */
     private Integer status;
 
+    /**
+     * 处理中租约到期时间（V1.0.3 加的）。
+     *
+     * 【为什么需要它】抢位记录是独立提交的，不受业务事务保护 ——
+     * 进程如果死在「抢完位、还没销登记」的窗口里，这行就永远停在 status=0，
+     * 之后所有同 key 的请求都会被 10007 挡住（用户其实什么都没做成）。
+     * 有了租约，「处理中」就不再是无限期的：过期即可被后来者接手。
+     */
+    private LocalDateTime lockedUntil;
+
     /** 成功响应的 JSON 快照，重复请求直接拿它重放 */
     private String resultSnapshot;
 

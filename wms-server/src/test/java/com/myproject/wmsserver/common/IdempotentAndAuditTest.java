@@ -1,6 +1,7 @@
 package com.myproject.wmsserver.common;
 
 import com.myproject.wmsserver.common.exception.InboundErrorCode;
+import com.myproject.wmsserver.common.idempotent.IdempotentCleanupJob;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,6 +45,9 @@ class IdempotentAndAuditTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private IdempotentCleanupJob idempotentCleanupJob;
 
     private Long testSkuId;
     private String token;
@@ -138,6 +143,28 @@ class IdempotentAndAuditTest {
         return n == null ? 0 : n;
     }
 
+    /**
+     * 把某条幂等记录改回「处理中」，并指定它的租约到期时间。
+     *
+     * 【为什么要这么模拟】现实里这条记录是「抢位成功但进程没回来销登记」留下的，
+     * 而 key 里带着请求体哈希 —— 手工拼一个一模一样的 key 很麻烦。
+     * 所以先让一次真实请求把它建出来（此时是 status=1），再把它改成
+     * 「处理中 + 指定租约」，等价于那一次执行永远没完成。
+     */
+    private void makeProcessing(String bizType, int leaseOffsetSeconds) {
+        jdbcTemplate.update(
+                "UPDATE idempotent_record SET status = 0, locked_until = ? "
+                        + "WHERE biz_type = ? AND id = (SELECT max_id FROM ("
+                        + "SELECT MAX(id) AS max_id FROM idempotent_record WHERE biz_type = ?) t)",
+                LocalDateTime.now().plusSeconds(leaseOffsetSeconds), bizType, bizType);
+    }
+
+    private LocalDateTime lockedUntil(String bizType) {
+        return jdbcTemplate.queryForObject(
+                "SELECT locked_until FROM idempotent_record WHERE biz_type = ? ORDER BY id DESC LIMIT 1",
+                LocalDateTime.class, bizType);
+    }
+
     private int idempotentStatus(String bizType) {
         Integer n = jdbcTemplate.queryForObject(
                 "SELECT status FROM idempotent_record WHERE biz_type = ? ORDER BY id DESC LIMIT 1",
@@ -194,6 +221,79 @@ class IdempotentAndAuditTest {
         // 换了数量就是另一批货（同一天分两次到货），必须能收进来
         receive(receiveKey, 20);
         assertEquals(50, receivedQty(), "内容不同的第二批收货要被放行");
+    }
+
+    @Test
+    @DisplayName("处理中且租约【未】到期：拒绝重复提交（人家确实在跑）")
+    void processingWithinLeaseShouldBeRejected() throws Exception {
+        String key = UUID.randomUUID().toString();
+        createOrder(key, 10);
+        int before = orderCount();
+
+        // 模拟「另一个请求正在处理，租约还有 30 秒」
+        makeProcessing("INBOUND_CREATE", 30);
+
+        MvcResult again = mockMvc.perform(post("/api/v1/inbound/inbound-orders")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Idempotent-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody(10)))
+                .andReturn();
+        String body = again.getResponse().getContentAsString();
+        assertTrue(body.contains("10007"), "租约没过期就该拒绝：" + body);
+        assertEquals(before, orderCount(), "被拒的请求不能真的建单");
+    }
+
+    @Test
+    @DisplayName("★ 处理中但租约【已】过期：判定持锁进程已死，后来者接手执行")
+    void expiredLeaseShouldAllowTakeover() throws Exception {
+        String key = UUID.randomUUID().toString();
+        createOrder(key, 10);
+        int before = orderCount();
+
+        // 模拟「抢位成功、进程随后崩了」：状态卡在处理中，租约早就过期
+        makeProcessing("INBOUND_CREATE", -300);
+
+        MvcResult takeover = mockMvc.perform(post("/api/v1/inbound/inbound-orders")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Idempotent-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody(10)))
+                .andReturn();
+        String body = takeover.getResponse().getContentAsString();
+        assertTrue(body.contains("\"code\":0"), "租约过期后应该能接手执行：" + body);
+        assertEquals(before + 1, orderCount(), "接手方要真的把这次业务做掉");
+        assertEquals(1, idempotentStatus("INBOUND_CREATE"), "接手完成后记录应该是成功");
+        assertTrue(lockedUntil("INBOUND_CREATE") == null, "完成后租约要清掉，免得让人误会还在处理");
+
+        // 说明：这里接手后确实执行了第二次（所以单数 +1）。
+        // 现实中「卡住的记录」意味着第一次执行根本没完成，接手正是我们要的；
+        // 而如果第一次只是【慢】，接手就会造成真的重复 ——
+        // 这就是租约必须远大于业务耗时（30 秒 vs 毫秒级）的原因。
+    }
+
+    @Test
+    @DisplayName("定时兜底：卡住很久的「处理中」会被标成失败，同 key 之后能正常重试")
+    void staleProcessingShouldBeMarkedFailedByHousekeeping() throws Exception {
+        String key = UUID.randomUUID().toString();
+        createOrder(key, 10);
+
+        // 租约过期 2 小时（远超兜底阈值 60 分钟）
+        makeProcessing("INBOUND_CREATE", -7200);
+
+        idempotentCleanupJob.housekeeping();
+
+        assertEquals(2, idempotentStatus("INBOUND_CREATE"), "兜底任务应该把它标成失败");
+        String errorMsg = jdbcTemplate.queryForObject(
+                "SELECT error_msg FROM idempotent_record WHERE biz_type = ? ORDER BY id DESC LIMIT 1",
+                String.class, "INBOUND_CREATE");
+        assertTrue(errorMsg != null && errorMsg.contains("超时"), "要留下能看懂的原因：" + errorMsg);
+
+        // 标成失败之后，同一个 key 再来就是「允许重试」，不再被 10007 挡死
+        int before = orderCount();
+        String retryBody = createOrder(key, 10);
+        assertTrue(retryBody.contains("\"code\":0"), "应该放行重试：" + retryBody);
+        assertEquals(before + 1, orderCount());
     }
 
     @Test

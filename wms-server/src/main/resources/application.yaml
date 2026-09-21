@@ -52,6 +52,11 @@ wms:
     cleanup-ms: 600000
     cleanup-initial-delay-ms: 60000
     cleanup-enabled: true
+    # 处理中租约（秒）。抢位时预约占用这么久；过期说明持锁进程已经不在了，允许别人接手。
+    # 【千万别改小】30 秒对毫秒级的接口是三个数量级的余量；改小会真的重复执行。
+    lease-seconds: 30
+    # 兜底：处理中超过这么多分钟还没销登记，直接标成失败（让同 key 的请求可以重试）
+    stale-processing-minutes: 60
 
 # 日志配置
 logging:
