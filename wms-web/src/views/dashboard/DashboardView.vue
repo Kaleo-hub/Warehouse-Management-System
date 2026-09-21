@@ -327,6 +327,28 @@ onMounted(load)
 .hero__warn { color: #fbbf24; font-weight: 700; }
 .hero__actions { position: relative; z-index: 1; display: flex; gap: 8px; }
 
+/*
+ * 欢迎条是深蓝渐变色块，里面的 text 按钮必须手动给亮色。
+ * Element 的 text 按钮默认用 --el-text-color-regular，
+ * 浅色模式下那是深灰 #475467，压在 #1E3A8A 上对比度只有 1.5:1 —— 基本看不见。
+ * 顺带加一层半透明白底，让人一眼看出这是个按钮，而不是一行文字。
+ */
+/* 容器已经用 gap 控间距，这里把 Element 给相邻按钮的 margin 归零，免得变成 16px */
+.hero__actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.hero__actions :deep(.el-button.is-text) {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.hero__actions :deep(.el-button.is-text:hover),
+.hero__actions :deep(.el-button.is-text:focus-visible) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.26);
+}
+
 /* ---------- 指标卡 ---------- */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
 .stat {

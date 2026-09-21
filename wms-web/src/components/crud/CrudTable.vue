@@ -23,18 +23,52 @@ const props = defineProps({
   canCreate: { type: Boolean, default: true },
   canUpdate: { type: Boolean, default: true },
   canDelete: { type: Boolean, default: true },
-  /** 操作列宽度，行操作多的时候调大 */
+  /**
+   * 操作列宽度。
+   *
+   * 【注意】固定列是硬裁切的：按钮加起来超过这个宽度，多出来的部分会被
+   * 直接剪掉（表现出来就是「库存」只看得见一个「存」字）。
+   * 经验值：2 个按钮 140，每多一个按钮加 60。
+   */
   actionWidth: { type: Number, default: 140 },
+  /**
+   * 进入页面时预置的查询条件，例如从「仓库 → 库区」下钻过来时带 zoneId。
+   * 只对 searchFields 里声明过的字段生效（其余字段照旧走默认值）。
+   */
+  initialQuery: { type: Object, default: () => ({}) },
 })
 
 const emit = defineEmits(['loaded', 'row-click'])
 
 /* ------------------------------ 查询 ------------------------------ */
+
+/**
+ * 归一化「下钻带过来的」筛选值。
+ *
+ * 【为什么需要】URL query 里取出来的值永远是字符串（"1"），
+ * 而下拉选项的 value 是数字 id（1）。不转类型的话 el-select 匹配不到选项，
+ * 就会把原始值 "1" 直接显示在框里 —— 筛选其实生效了，
+ * 但界面看起来像「没选上」，非常容易被当成 bug。
+ */
+function normalizePreset(field, preset) {
+  if (preset === undefined || preset === null || preset === '') return undefined
+  if (field.type === 'select' && typeof preset === 'string' && /^[0-9]+$/.test(preset)) {
+    return Number(preset)
+  }
+  return preset
+}
+
 function buildQuery() {
   const query = {}
   props.searchFields.forEach((field) => {
+    const preset = normalizePreset(field, props.initialQuery?.[field.prop])
     // 日期区间绑一个数组，提交时再拆成 beginTime / endTime
-    query[field.prop] = field.type === 'daterange' ? null : field.defaultValue ?? ''
+    query[field.prop] =
+      preset !== undefined
+        ? preset
+        : field.type === 'daterange'
+          ? null
+          : (field.defaultValue ?? '')
   })
   return query
 }
@@ -357,7 +391,8 @@ defineExpose({ reload: load, openCreate })
           <div class="crud__empty">
             <span class="crud__empty-mark">空</span>
             <p>没有符合条件的数据</p>
-            <em>试试调整查询条件，或新建一条{{ entityName }}</em>
+            <em v-if="canCreate">试试调整查询条件，或新建一条{{ entityName }}</em>
+            <em v-else>试试调整上面的查询条件，换个关键字再试</em>
           </div>
         </template>
       </el-table>

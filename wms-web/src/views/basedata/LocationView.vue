@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import CrudTable from '@/components/crud/CrudTable.vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { locationApi, zoneApi } from '@/api/basedata'
@@ -13,6 +14,8 @@ import {
   STATUS_OPTIONS,
   STATUS_TAG,
 } from '@/constants/options'
+
+const route = useRoute()
 
 const { options: warehouseOptions, load: loadWarehouses, labelOf: warehouseLabel } =
   useWarehouseOptions()
@@ -68,8 +71,20 @@ const stockTotal = computed(() =>
   stockRows.value.reduce((sum, r) => sum + (Number(r.qty) || 0), 0),
 )
 
+/** 深链：带着 stockLocationId 进来，说明是从库区抽屉点「商品」过来的，直接把库存抽屉打开 */
+async function openStockById(id) {
+  try {
+    openStock(await locationApi.detail(id))
+  } catch (error) {
+    toastError(error, '库位加载失败')
+  }
+}
+
 onMounted(async () => {
   loadWarehouses()
+  if (route.query.stockLocationId) {
+    openStockById(route.query.stockLocationId)
+  }
   try {
     /*
      * 库区下拉要按仓库过滤，所以这里把全部库区拉回来本地过滤。
@@ -112,6 +127,13 @@ const columns = [
 const searchFields = computed(() => [
   { prop: 'keyword', label: '关键字', placeholder: '库位编码 / 名称' },
   { prop: 'warehouseId', label: '所属仓库', type: 'select', options: warehouseOptions.value },
+  {
+    prop: 'zoneId',
+    label: '所属库区',
+    type: 'select',
+    // 库区不多，直接全列出来（标签带上编码），省掉「选了仓库才能选库区」的联动
+    options: zones.value.map((item) => ({ label: item.name + '（' + item.code + '）', value: item.id })),
+  },
   { prop: 'status', label: '状态', type: 'select', options: STATUS_OPTIONS },
 ])
 
@@ -164,6 +186,8 @@ const formFields = computed(() => [
       :columns="columns"
       :search-fields="searchFields"
       :form-fields="formFields"
+      :initial-query="{ zoneId: route.query.zoneId }"
+      :action-width="200"
       entity-name="库位"
     >
       <template #col-warehouseName="{ row }">

@@ -13,9 +13,35 @@ const lastRunAt = ref('')
 const mismatches = computed(() => result.value?.mismatches ?? [])
 const hasMismatch = computed(() => Number(result.value?.mismatchCount ?? 0) > 0)
 
-const resultTone = computed(() => {
-  if (!result.value) return 'idle'
-  return hasMismatch.value ? 'warn' : 'ok'
+/**
+ * 这一批不一致是不是已经全修完了。
+ *
+ * 为什么需要它：autoFix 返回的是「扫描时发现的那批行 + 每行的修正结果」，
+ * 所以修完之后 mismatchCount 依然是 1（它说的是「当时查到几条」）。
+ * 界面上如果照搬这个数字，就会出现「横幅说发现 1 条不符、表格里每行都写着已修正」
+ * 这种自相矛盾的画面，还会诱导人再点一次修正。
+ */
+const allFixed = computed(() => {
+  const list = mismatches.value
+  return list.length > 0 && list.every((item) => item.fixResult === 'FIXED')
+})
+
+const bannerTone = computed(() => (hasMismatch.value && !allFixed.value ? 'warn' : 'ok'))
+
+const bannerTitle = computed(() => {
+  if (allFixed.value) return '已按流水修正 ' + result.value.fixedCount + ' 条，账已平'
+  if (hasMismatch.value) return '发现 ' + result.value.mismatchCount + ' 条库存余额与流水不一致'
+  return '账是平的'
+})
+
+const bannerText = computed(() => {
+  if (allFixed.value) {
+    return '下面列的是本次修正记录（余额已按流水重算，没有写库存流水）。点「再对一次」可以复查。'
+  }
+  if (hasMismatch.value) {
+    return '下面这些行的余额和「流水累加出来的值」对不上。以流水为准（流水只增不改不删，是事实记录；余额是可以重新推出来的缓存），确认后可以按流水把余额修正回来。'
+  }
+  return result.value.checkedCount + ' 条库存的余额都等于它所有流水的累加值，不需要处理。'
 })
 
 function stamp() {
@@ -79,30 +105,40 @@ async function runFix() {
   }
 }
 
-function diffClass(balance, calculated) {
-  if (balance === calculated) return ''
-  return 'is-diff'
-}
-
 function fixResultTag(text) {
   if (text === 'FIXED') return { type: 'success', label: '已修正' }
   if (text === 'FAILED') return { type: 'danger', label: '修正失败' }
   return { type: 'info', label: '仅检查' }
 }
 
+/*
+ * 三个数量各自是「余额 vs 流水」的一对值。
+ * 以前是 6 列平铺（余额在库 / 流水在库 / 余额锁定 / 流水锁定 …），
+ * 12 列的表又宽又难读，眼睛得来回找哪两个是一对。
+ * 改成「余额 → 流水」的对照单元格后只剩 9 列，差异一眼就能看见 ——
+ * 这个页面的全部意义就是看差异，展示方式应该围着它转。
+ */
+const compareFields = {
+  qtyCompare: { balance: 'balanceQty', calculated: 'calculatedQty' },
+  lockedCompare: { balance: 'balanceLockedQty', calculated: 'calculatedLockedQty' },
+  frozenCompare: { balance: 'balanceFrozenQty', calculated: 'calculatedFrozenQty' },
+}
+
+function isDiff(row, prop) {
+  const field = compareFields[prop]
+  return row[field.balance] !== row[field.calculated]
+}
+
 const columns = [
-  { prop: 'locationCode', label: '库位', width: 130 },
-  { prop: 'skuCode', label: 'SKU', width: 120 },
-  { prop: 'skuName', label: '商品名称', minWidth: 150 },
-  { prop: 'batchNo', label: '批次', width: 120 },
-  { prop: 'balanceQty', label: '余额·在库', width: 100, align: 'right' },
-  { prop: 'calculatedQty', label: '流水·在库', width: 100, align: 'right' },
-  { prop: 'balanceLockedQty', label: '余额·锁定', width: 100, align: 'right' },
-  { prop: 'calculatedLockedQty', label: '流水·锁定', width: 100, align: 'right' },
-  { prop: 'balanceFrozenQty', label: '余额·冻结', width: 100, align: 'right' },
-  { prop: 'calculatedFrozenQty', label: '流水·冻结', width: 100, align: 'right' },
-  { prop: 'fixResult', label: '结果', width: 110 },
-  { prop: 'remark', label: '说明', minWidth: 180 },
+  { prop: 'locationCode', label: '库位', width: 120 },
+  { prop: 'skuCode', label: 'SKU', width: 110 },
+  { prop: 'skuName', label: '商品名称', minWidth: 140 },
+  { prop: 'batchNo', label: '批次', width: 110 },
+  { prop: 'qtyCompare', label: '在库（余额 → 流水）', width: 160, align: 'right' },
+  { prop: 'lockedCompare', label: '锁定（余额 → 流水）', width: 160, align: 'right' },
+  { prop: 'frozenCompare', label: '冻结（余额 → 流水）', width: 160, align: 'right' },
+  { prop: 'fixResult', label: '结果', width: 96 },
+  { prop: 'remark', label: '说明', minWidth: 170 },
 ]
 </script>
 
@@ -134,27 +170,23 @@ const columns = [
       </div>
     </section>
 
-    <section v-if="result" class="banner" :class="`banner--${resultTone}`">
+    <section v-if="result" class="banner" :class="'banner--' + bannerTone">
       <div class="banner__text">
-        <strong v-if="!hasMismatch">账是平的</strong>
-        <strong v-else>发现 {{ result.mismatchCount }} 条库存余额与流水不一致</strong>
-        <p v-if="!hasMismatch">
-          {{ result.checkedCount }} 条库存的余额都等于它所有流水的累加值，不需要处理。
-        </p>
-        <p v-else>
-          下面这些行的余额和「流水累加出来的值」对不上。以流水为准（流水只增不改不删，是事实记录；
-          余额是可以重新推出来的缓存），确认后可以按流水把余额修正回来。
-        </p>
+        <strong>{{ bannerTitle }}</strong>
+        <p>{{ bannerText }}</p>
       </div>
-      <el-button v-if="hasMismatch" type="warning" :loading="fixing" @click="runFix">
-        按流水修正
-      </el-button>
+      <div class="banner__actions">
+        <el-button v-if="hasMismatch && !allFixed" type="warning" :loading="fixing" @click="runFix">
+          按流水修正
+        </el-button>
+        <el-button v-else :loading="checking" @click="runCheck">再对一次</el-button>
+      </div>
     </section>
 
     <section v-if="result" class="panel">
       <header class="panel__head">
         <h3>不一致明细</h3>
-        <span class="panel__hint">数字左为余额、右为流水累加值</span>
+        <span class="panel__hint">箭头左边是余额，右边是按流水重算的值，红字就是不一致的那一侧</span>
       </header>
 
       <el-table :data="mismatches" stripe>
@@ -176,23 +208,14 @@ const columns = [
                 {{ fixResultTag(row.fixResult).label }}
               </el-tag>
             </template>
-            <template v-else-if="column.prop === 'balanceQty'">
-              <span class="num" :class="diffClass(row.balanceQty, row.calculatedQty)">
-                {{ row.balanceQty }}
+            <template v-else-if="compareFields[column.prop]">
+              <span class="pair">
+                <em class="num" :class="{ 'is-diff': isDiff(row, column.prop) }">
+                  {{ row[compareFields[column.prop].balance] }}
+                </em>
+                <span class="pair__arrow">→</span>
+                <em class="num pair__calc">{{ row[compareFields[column.prop].calculated] }}</em>
               </span>
-            </template>
-            <template v-else-if="column.prop === 'balanceLockedQty'">
-              <span class="num" :class="diffClass(row.balanceLockedQty, row.calculatedLockedQty)">
-                {{ row.balanceLockedQty }}
-              </span>
-            </template>
-            <template v-else-if="column.prop === 'balanceFrozenQty'">
-              <span class="num" :class="diffClass(row.balanceFrozenQty, row.calculatedFrozenQty)">
-                {{ row.balanceFrozenQty }}
-              </span>
-            </template>
-            <template v-else-if="column.prop.endsWith('Qty')">
-              <span class="num">{{ row[column.prop] }}</span>
             </template>
             <template v-else>
               <span>{{ row[column.prop] }}</span>
@@ -317,6 +340,17 @@ const columns = [
   background: var(--warning-50, #fffbeb);
 }
 
+/* 按钮和文字之间用 flex 的 gap 控间距，别让 Element 的 margin 再叠一层 */
+.banner__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.banner__actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
 .banner__text strong {
   display: block;
   margin-bottom: 4px;
@@ -344,6 +378,7 @@ const columns = [
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 14px 18px;
   border-bottom: 1px solid var(--divider);
 }
@@ -359,15 +394,33 @@ const columns = [
   color: var(--text-placeholder);
 }
 
-.num {
+/* ---------- 余额 → 流水 对照 ---------- */
+.pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pair__arrow {
+  font-size: 11px;
+  color: var(--text-placeholder);
+}
+
+.pair .num {
   font-family: var(--font-mono);
   font-size: 12.5px;
+  font-style: normal;
+  color: var(--text-regular);
   font-variant-numeric: tabular-nums;
 }
 
-.num.is-diff {
+.pair .num.is-diff {
   font-weight: 700;
   color: var(--danger-600);
+}
+
+.pair .num.pair__calc {
+  color: var(--text-secondary);
 }
 
 .mono {

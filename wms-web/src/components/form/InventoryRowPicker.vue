@@ -117,15 +117,27 @@ function handleChange(id) {
 </template>
 
 <style scoped>
+/*
+ * el-form-item__content 本身是 flex 容器，子项默认按内容宽度排，
+ * 不给 width: 100% 的话这个选择器只有 248px 宽，
+ * 而同一张表单里的输入框是满宽的 —— 看起来就是「这一行没对齐」。
+ */
 .picker {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
 }
 
 .picker__search {
   display: flex;
   gap: 8px;
+}
+
+/* 关键字框吃掉剩余宽度，查询按钮保持自身宽度 */
+.picker__search :deep(.el-input) {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .picker__select {

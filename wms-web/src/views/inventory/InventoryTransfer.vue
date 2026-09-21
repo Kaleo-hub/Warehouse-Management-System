@@ -415,6 +415,12 @@ async function submit() {
   gap: 8px;
 }
 
+/* 间距由 gap 控制，把 Element 默认的相邻按钮 margin 归零（否则两个按钮之间是 16px） */
+.actions :deep(.el-button + .el-button),
+.result__actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
 /* ---------- 右侧 ---------- */
 .card--result h3 {
   margin-bottom: 10px;
