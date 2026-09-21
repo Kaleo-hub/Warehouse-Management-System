@@ -44,6 +44,12 @@ export const routes = [
         component: () => import('@/views/basedata/ProductView.vue'),
         meta: { title: '商品管理', breadcrumb: ['基础数据', '商品管理'], roles: ['ADMIN', 'MANAGER'] },
       },
+      {
+        path: 'basedata/partners',
+        name: 'PartnerList',
+        component: () => import('@/views/basedata/PartnerView.vue'),
+        meta: { title: '往来单位', breadcrumb: ['基础数据', '往来单位'], roles: ['ADMIN', 'MANAGER'] },
+      },
 
       /* ---------------- 入库 ---------------- */
       {

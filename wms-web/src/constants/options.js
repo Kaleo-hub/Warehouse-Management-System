@@ -10,6 +10,17 @@ export const STATUS_TAG = {
   DISABLED: { text: '停用', type: 'info' },
 }
 
+/* ---------- 往来单位类型（对应后端 basedata/enums/PartnerType） ---------- */
+export const PARTNER_TYPE_OPTIONS = [
+  { label: '供应商', value: 'SUPPLIER' },
+  { label: '客户', value: 'CUSTOMER' },
+]
+
+export const PARTNER_TYPE_TAG = {
+  SUPPLIER: { text: '供应商', type: 'warning' },
+  CUSTOMER: { text: '客户', type: 'primary' },
+}
+
 /* ---------- 用户角色（对应后端 system/enums/UserRole） ---------- */
 export const ROLE_OPTIONS = [
   { label: '系统管理员', value: 'ADMIN' },

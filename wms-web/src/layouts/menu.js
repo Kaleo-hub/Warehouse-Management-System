@@ -58,6 +58,7 @@ export const menuGroups = [
       { title: '库区管理', path: '/basedata/zones', icon: Grid, roles: MANAGE },
       { title: '库位管理', path: '/basedata/locations', icon: Location, roles: MANAGE },
       { title: '商品管理', path: '/basedata/products', icon: Goods, roles: MANAGE },
+      { title: '往来单位', path: '/basedata/partners', icon: OfficeBuilding, roles: MANAGE },
     ],
   },
   {
