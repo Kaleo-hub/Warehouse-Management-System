@@ -10,6 +10,12 @@ import { inboundApi } from '@/api/inbound'
 import { useIdempotentKey } from '@/composables/useIdempotentKey'
 import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
 import { useSkuOptions } from '@/composables/useSkuOptions'
+import { usePartnerOptions } from '@/composables/usePartnerOptions'
+
+/* 往来单位下拉：只列启用状态的 供应商 */
+const { options: partnerOptions, loading: partnerLoading, load: loadPartnerOptions } =
+  usePartnerOptions('SUPPLIER')
+loadPartnerOptions()
 
 const router = useRouter()
 const formRef = ref(null)
@@ -26,7 +32,14 @@ const { options: skuOptions, load: loadSkus } = useSkuOptions()
 
 const form = reactive({
   warehouseId: null,
-  supplierName: '',
+  /**
+   * 供应商：现在存的是【主数据 id】。
+   *
+   * 【为什么不再让用户手打名字】同一家公司会出现「XX公司 / XX有限公司 / xx公司」
+   * 三种写法，按供应商统计、对账全都做不了。名称由后端从主数据取快照存进单据，
+   * 前端只负责挑「是哪一家」。
+   */
+  supplierId: undefined,
   expectArriveTime: null,
   remark: '',
   items: [],
@@ -62,7 +75,7 @@ async function handleSubmit() {
     // 只提交后端需要的字段，别把前端的展示字段（label 之类）传过去
     const payload = {
       warehouseId: form.warehouseId,
-      supplierName: form.supplierName,
+      supplierId: form.supplierId,
       expectArriveTime: form.expectArriveTime,
       remark: form.remark,
       items: form.items.map((row) => ({
@@ -114,13 +127,22 @@ async function handleSubmit() {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="供应商" prop="supplierName">
-            <el-input
-              v-model="form.supplierName"
-              placeholder="选填，例如 某某供应链有限公司"
-              maxlength="128"
-              show-word-limit
-            />
+          <el-form-item label="供应商" prop="supplierId">
+            <el-select
+              v-model="form.supplierId"
+              placeholder="请选择供应商（没有就去「基础数据 → 往来单位」先建档）"
+              filterable
+              clearable
+              :loading="partnerLoading"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="option in partnerOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
           </el-form-item>
 
           <el-form-item label="预计到货时间" prop="expectArriveTime">

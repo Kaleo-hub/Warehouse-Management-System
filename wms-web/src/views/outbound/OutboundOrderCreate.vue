@@ -10,6 +10,12 @@ import { useIdempotentKey } from '@/composables/useIdempotentKey'
 import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
 import { useSkuOptions } from '@/composables/useSkuOptions'
 import { toastError } from '@/utils/error'
+import { usePartnerOptions } from '@/composables/usePartnerOptions'
+
+/* 往来单位下拉：只列启用状态的 客户 */
+const { options: partnerOptions, loading: partnerLoading, load: loadPartnerOptions } =
+  usePartnerOptions('CUSTOMER')
+loadPartnerOptions()
 
 const router = useRouter()
 const formRef = ref(null)
@@ -23,7 +29,8 @@ const { options: skuOptions, load: loadSkus } = useSkuOptions()
 
 const form = reactive({
   warehouseId: null,
-  customerName: '',
+  /** 客户：同入库单，存主数据 id，名称由后端取快照 */
+  customerId: undefined,
   receiveAddress: '',
   expectShipTime: null,
   remark: '',
@@ -59,7 +66,7 @@ async function handleSubmit() {
   try {
     const payload = {
       warehouseId: form.warehouseId,
-      customerName: form.customerName,
+      customerId: form.customerId,
       receiveAddress: form.receiveAddress,
       expectShipTime: form.expectShipTime,
       remark: form.remark,
@@ -109,8 +116,22 @@ async function handleSubmit() {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="客户名称" prop="customerName">
-            <el-input v-model="form.customerName" placeholder="选填" maxlength="128" show-word-limit />
+          <el-form-item label="客户" prop="customerId">
+            <el-select
+              v-model="form.customerId"
+              placeholder="请选择客户（没有就去「基础数据 → 往来单位」先建档）"
+              filterable
+              clearable
+              :loading="partnerLoading"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="option in partnerOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
           </el-form-item>
 
           <el-form-item label="要求发货时间" prop="expectShipTime">
