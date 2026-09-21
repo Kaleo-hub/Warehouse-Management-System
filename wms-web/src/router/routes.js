@@ -150,6 +150,12 @@ export const routes = [
         component: () => import('@/views/system/UserView.vue'),
         meta: { title: '用户管理', breadcrumb: ['系统', '用户管理'], roles: ['ADMIN'] },
       },
+      {
+        path: 'system/audit-logs',
+        name: 'AuditLogList',
+        component: () => import('@/views/system/AuditLogView.vue'),
+        meta: { title: '操作日志', breadcrumb: ['系统', '操作日志'], roles: ['ADMIN'] },
+      },
     ],
   },
   {

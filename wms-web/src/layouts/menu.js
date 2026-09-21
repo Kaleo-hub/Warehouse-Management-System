@@ -13,6 +13,7 @@ import {
   OfficeBuilding,
   RefreshRight,
   Setting,
+  Tickets,
   Upload,
   User,
   Van,
@@ -89,6 +90,7 @@ export const menuGroups = [
     title: '系统',
     items: [
       { title: '用户管理', path: '/system/users', icon: User, roles: SYSTEM },
+      { title: '操作日志', path: '/system/audit-logs', icon: Tickets, roles: SYSTEM },
       { title: '系统设置', path: '/settings', icon: Setting, roles: SYSTEM, soon: true },
     ],
   },

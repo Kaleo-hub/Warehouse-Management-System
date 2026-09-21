@@ -24,4 +24,15 @@ export const userApi = {
   changeOwnPassword: (payload) => request.put('/v1/auth/password', payload),
 }
 
+/**
+ * 审计日志查询（仅 ADMIN）。
+ *
+ * 只读：审计的写入口只有一个 —— 后端的 AuditLogAspect 自动记，
+ * 所以这里刻意没有 create / update / remove。
+ */
+export const auditApi = {
+  /** 分页：page / size / keyword（操作人·动作·对象id）/ module / result / traceId / beginTime / endTime */
+  page: (params) => request.get('/v1/system/audit-logs', { params }),
+}
+
 export default userApi

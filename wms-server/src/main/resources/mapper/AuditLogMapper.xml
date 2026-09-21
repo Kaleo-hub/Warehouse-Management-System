@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.common.audit.mapper.AuditLogMapper">
+
+    <!--
+      审计日志分页。
+      统一按 id 倒序：审计表只增，id 就是时间序，走主键比额外排序便宜。
+      detail（一整段请求 JSON）只在列表里带出来 —— 数据量大了应该拆成
+      「列表查概要 + 点开再查详情」两个接口，现阶段行数少，先这样。
+    -->
+    <select id="selectAuditPage" resultType="com.myproject.wmsserver.common.audit.vo.AuditLogVO">
+        SELECT id,
+               trace_id,
+               user_id,
+               user_name,
+               module,
+               action,
+               target_type,
+               target_id,
+               result,
+               error_msg,
+               cost_ms,
+               ip,
+               create_time,
+               detail
+        FROM audit_log
+        <where>
+            <if test="query.keyword != null and query.keyword != ''">
+                AND (user_name LIKE CONCAT('%', #{query.keyword}, '%')
+                     OR action LIKE CONCAT('%', #{query.keyword}, '%')
+                     OR target_id LIKE CONCAT('%', #{query.keyword}, '%'))
+            </if>
+            <if test="query.module != null and query.module != ''">
+                AND module = #{query.module}
+            </if>
+            <if test="query.result != null">
+                AND result = #{query.result}
+            </if>
+            <if test="query.traceId != null and query.traceId != ''">
+                AND trace_id = #{query.traceId}
+            </if>
+            <if test="query.beginTime != null">
+                AND create_time &gt;= #{query.beginTime}
+            </if>
+            <if test="query.endTime != null">
+                AND create_time &lt;= #{query.endTime}
+            </if>
+        </where>
+        ORDER BY id DESC
+    </select>
+
+</mapper>
