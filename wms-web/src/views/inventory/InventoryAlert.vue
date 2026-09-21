@@ -14,6 +14,7 @@ import { toastError } from '@/utils/error'
  *   冻结      —— 冻着没动，占着可用量
  *   库位超容  —— 数据异常（正常流程不该出现），要人工核对
  */
+const app = useAppStore()
 const loading = ref(false)
 const alerts = ref({ expiring: [], frozen: [], overCapacity: [], expireDays: 30 })
 const activeTab = ref('expiring')
@@ -21,7 +22,6 @@ const expireDays = ref(app.alertDays)
 const warehouseId = ref(app.currentWarehouseId)
 
 const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions()
-const app = useAppStore()
 
 const counts = computed(() => ({
   expiring: alerts.value.expiring?.length || 0,

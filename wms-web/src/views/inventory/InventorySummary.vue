@@ -14,13 +14,13 @@ import { toastError } from '@/utils/error'
  * 明细视图回答「A 库位放了什么」，汇总视图回答「我这个仓一共多少货」——
  * 后者才是管理员每天要看的东西。
  */
+const app = useAppStore()
 const loading = ref(false)
 const rows = ref([])
 const dimension = ref('WAREHOUSE')
 const warehouseId = ref(app.currentWarehouseId)
 
 const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions()
-const app = useAppStore()
 
 const DIMENSIONS = [
   { label: '按仓库', value: 'WAREHOUSE' },
