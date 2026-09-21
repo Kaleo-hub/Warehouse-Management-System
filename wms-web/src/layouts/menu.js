@@ -6,10 +6,12 @@ import {
   Goods,
   Grid,
   Histogram,
+  DocumentChecked,
   List,
   Location,
   Odometer,
   OfficeBuilding,
+  RefreshRight,
   Setting,
   Upload,
   Van,
@@ -48,6 +50,9 @@ export const menuGroups = [
       { title: '库存汇总', path: '/inventory/summary', icon: Histogram },
       { title: '库存预警', path: '/inventory/alerts', icon: Warning },
       { title: '库存流水', path: '/inventory/transactions', icon: List },
+      { title: '库存移库', path: '/inventory/transfer', icon: Coordinate },
+      { title: '库存盘点', path: '/inventory/stocktaking', icon: DocumentChecked },
+      { title: '库存对账', path: '/inventory/reconcile', icon: RefreshRight },
     ],
   },
   {
@@ -60,7 +65,6 @@ export const menuGroups = [
   {
     title: '系统',
     items: [
-      { title: '库存移库', path: '/inventory/transfer', icon: Coordinate, soon: true },
       { title: '系统设置', path: '/settings', icon: Setting, soon: true },
     ],
   },

@@ -1,18 +1,50 @@
 import request from './request'
 
 /**
- * 库存与流水。都是只读查询，写操作一律由业务动作（收货、上架、出库…）间接完成，
- * 前端不允许直接改库存 —— 这是 BR-008「流水只增不改」的前提。
+ * 库存接口。
+ *
+ * 查询部分是只读的；写入部分没有「直接改库存」的方法，全是业务动作：
+ * 冻结 / 解冻 / 移库 / 盘点 / 对账。
+ * 每个动作背后都有明确业务语义，服务端会写对应的库存流水 ——
+ * 前端不可能绕过这些动作去改数，这是 BR-008「流水只增不改」的前提。
  */
 export const inventoryApi = {
   /** 库存分页查询：page / size / warehouseId / skuId / locationId / batchNo / keyword */
   page: (params) => request.get('/v1/inventory/inventories', { params }),
+
+  /** 库存详情（移库 / 盘点页面深链进来时拿初值） */
+  detail: (id) => request.get(`/v1/inventory/inventories/${id}`),
 
   /** 库存流水查询：page / size / skuId / locationId / txType / sourceNo / beginTime / endTime */
   transactions: (params) => request.get('/v1/inventory/transactions', { params }),
 
   /** 条库存流水明细（对账用） */
   transactionDetail: (id) => request.get(`/v1/inventory/transactions/${id}`),
+
+  /** 冻结：frozen_qty +qty。货还在库，可用数量变少，不可分配也不可移库 */
+  freeze: (id, qty) => request.post(`/v1/inventory/inventories/${id}/freeze`, { qty }),
+
+  /** 解冻：frozen_qty -qty，可用数量恢复 */
+  unfreeze: (id, qty) => request.post(`/v1/inventory/inventories/${id}/unfreeze`, { qty }),
+
+  /**
+   * 移库：把某库位某批次挪到同仓库的另一个库位。
+   * 一个事务里转出 -n、转入 +n，服务端失败会整体回滚。
+   */
+  transfer: (payload) => request.post('/v1/inventory/transfers', payload),
+
+  /**
+   * 盘点：传实盘数量（不是差异），后端自己算差异并写盘盈 / 盘亏流水。
+   * 返回 { systemQty, actualQty, diffQty, txType, changed }。
+   */
+  stocktake: (payload) => request.post('/v1/inventory/stocktakings', payload),
+
+  /**
+   * 对账：按流水重算库存余额（BR-009）。
+   * autoFix=false 只检查不改数；true 会把余额改成按流水重算出来的值。
+   */
+  reconcile: (autoFix = false) =>
+    request.post('/v1/inventory/reconcile', null, { params: { autoFix } }),
 
   /**
    * 库存总览（工作台看板）。

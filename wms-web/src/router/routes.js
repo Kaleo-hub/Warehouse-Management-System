@@ -124,6 +124,24 @@ export const routes = [
         component: () => import('@/views/inventory/TransactionList.vue'),
         meta: { title: '库存流水', breadcrumb: ['库存管理', '库存流水'] },
       },
+      {
+        path: 'inventory/transfer',
+        name: 'InventoryTransfer',
+        component: () => import('@/views/inventory/InventoryTransfer.vue'),
+        meta: { title: '库存移库', breadcrumb: ['库存管理', '库存移库'] },
+      },
+      {
+        path: 'inventory/stocktaking',
+        name: 'Stocktaking',
+        component: () => import('@/views/inventory/Stocktaking.vue'),
+        meta: { title: '库存盘点', breadcrumb: ['库存管理', '库存盘点'] },
+      },
+      {
+        path: 'inventory/reconcile',
+        name: 'Reconcile',
+        component: () => import('@/views/inventory/Reconcile.vue'),
+        meta: { title: '库存对账', breadcrumb: ['库存管理', '库存对账'] },
+      },
     ],
   },
   {
