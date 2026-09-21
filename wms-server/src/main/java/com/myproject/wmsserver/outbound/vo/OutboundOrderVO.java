@@ -32,6 +32,12 @@ public class OutboundOrderVO {
 
     private String status;
 
+    /** 红冲的原单 ID（当前单据是红冲单时才有值） */
+    private Long reverseOfId;
+
+    /** 当前单据被哪张红冲单冲掉（原单被冲后才有值） */
+    private Long reversedById;
+
     private Integer totalQty;
 
     private Integer allocatedQty;

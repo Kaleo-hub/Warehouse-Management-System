@@ -16,6 +16,7 @@ export const OUTBOUND_STATUS = {
   PICKING: { text: '拣货中', type: 'primary' },
   PICKED: { text: '已拣货', type: 'primary' },
   SHIPPED: { text: '已发货', type: 'success' },
+  REVERSED: { text: '已红冲', type: 'danger' },
   CLOSED: { text: '已关闭', type: 'info' },
   CANCELLED: { text: '已取消', type: 'danger' },
 }
@@ -33,6 +34,9 @@ export const RELEASABLE_STATUS = ['ALLOCATED']
 export const PICKABLE_STATUS = ['ALLOCATED']
 /** 全部拣完才能发货 */
 export const SHIPPABLE_STATUS = ['PICKED']
+
+/** 只有已发货的单能红冲 */
+export const REVERSIBLE_STATUS = ['SHIPPED']
 
 /* ---------------- 分配明细状态 ---------------- */
 export const ALLOCATE_STATUS = {

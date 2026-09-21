@@ -32,6 +32,9 @@ export const outboundApi = {
   /** 发货：qty 和 locked_qty 一起减（账实核销） */
   ship: (id) => request.post(`${base}/${id}/ship`),
 
+  /** 红冲：已发货单据开反向单并恢复库存，返回红冲单 id */
+  reverse: (id) => request.post(`${base}/${id}/reverse`),
+
   /** 取消：只有 CREATED 允许 */
   cancel: (id) => request.post(`${base}/${id}/cancel`),
 }

@@ -557,6 +557,10 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
                     .remark("出库红冲：" + original.getOrderNo())
                     .createIfAbsent(false)
                     .build());
+
+            // 发货时减掉了库位占用，红冲把货退回库位时要同步加回来。
+            // 这一步和库存变动同事务：容量不足会整体回滚，不会出现库存退了、占用没记的情况。
+            locationService.increaseUsedCapacity(allocate.getLocationId(), qty);
         }
 
         /*

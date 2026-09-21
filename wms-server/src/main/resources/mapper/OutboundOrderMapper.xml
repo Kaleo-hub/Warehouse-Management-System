@@ -35,7 +35,8 @@
     <select id="selectOrderDetail" resultType="com.myproject.wmsserver.outbound.vo.OutboundOrderVO">
         SELECT o.id, o.order_no, o.warehouse_id, w.name AS warehouse_name,
                o.customer_name, o.receive_address, o.expect_ship_time,
-               o.status, o.total_qty, o.allocated_qty, o.picked_qty,
+               o.status, o.reverse_of_id, o.reversed_by_id,
+               o.total_qty, o.allocated_qty, o.picked_qty,
                o.allocate_time, o.remark, o.create_time, o.update_time
         FROM outbound_order o
                  LEFT JOIN warehouse w ON w.id = o.warehouse_id AND w.deleted = 0

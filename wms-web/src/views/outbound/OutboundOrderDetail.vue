@@ -13,6 +13,7 @@ import {
   OUTBOUND_STATUS,
   PICKABLE_STATUS,
   RELEASABLE_STATUS,
+  REVERSIBLE_STATUS,
   SHIPPABLE_STATUS,
 } from '@/constants/outbound'
 
@@ -30,6 +31,7 @@ const canAllocate = computed(() => ALLOCATABLE_STATUS.includes(order.value?.stat
 const canRelease = computed(() => RELEASABLE_STATUS.includes(order.value?.status))
 const canPick = computed(() => PICKABLE_STATUS.includes(order.value?.status))
 const canShip = computed(() => SHIPPABLE_STATUS.includes(order.value?.status))
+const canReverse = computed(() => REVERSIBLE_STATUS.includes(order.value?.status))
 const canCancel = computed(() => ALLOCATABLE_STATUS.includes(order.value?.status))
 
 /** 进度条：0 建单 → 1 已分配 → 2 拣货中 → 3 已拣完 → 4 已发货 */
@@ -40,6 +42,7 @@ const stepActive = computed(() => {
     PICKING: 2,
     PICKED: 3,
     SHIPPED: 4,
+    REVERSED: 4,
     CLOSED: 4,
   }
   return map[order.value?.status] ?? 0
@@ -58,7 +61,7 @@ async function load() {
 
 /**
  * 统一的动作执行：确认 → 调接口 → 刷新。
- * 出库的动作比较多（分配/释放/生成拣货任务/发货/取消），收敛成一个函数避免重复。
+ * 出库的动作比较多（分配/释放/生成拣货任务/发货/红冲/取消），收敛成一个函数避免重复。
  */
 async function runAction({ confirmTitle, confirmText, confirmButton, api, successText }) {
   try {
@@ -124,6 +127,16 @@ function handleShip() {
   })
 }
 
+function handleReverse() {
+  runAction({
+    confirmTitle: '红冲出库单',
+    confirmText: `红冲不会修改原单，而是新建一张反向单，并按原分配批次恢复库存。原单将标记为“已红冲”，此操作不可撤销。`,
+    confirmButton: '确认红冲',
+    api: () => outboundApi.reverse(orderId),
+    successText: '红冲完成，库存已恢复',
+  })
+}
+
 function handleCancel() {
   runAction({
     confirmTitle: '取消出库单',
@@ -132,6 +145,10 @@ function handleCancel() {
     api: () => outboundApi.cancel(orderId),
     successText: '出库单已取消',
   })
+}
+
+function goOrder(id) {
+  router.push(`/outbound/orders/${id}`)
 }
 
 function goPickTasks() {
@@ -156,6 +173,7 @@ onMounted(load)
       <el-button v-if="order?.status === 'PICKING'" type="primary" plain @click="goPickTasks">
         去拣货
       </el-button>
+      <el-button v-if="canReverse" type="danger" plain @click="handleReverse">红冲</el-button>
       <el-button v-if="canShip" type="success" @click="handleShip">确认发货</el-button>
     </PageHeading>
 
@@ -171,6 +189,9 @@ onMounted(load)
           </span>
           <span v-else-if="order.status === 'PICKING'" class="statusbar__hint">
             货已从货架拣出，账面暂不变化 —— 发货时才核销库存
+          </span>
+          <span v-else-if="order.status === 'REVERSED'" class="statusbar__hint statusbar__hint--danger">
+            该单据已由红冲单冲平，原发货流水仍保留
           </span>
         </div>
 
@@ -198,6 +219,16 @@ onMounted(load)
           <el-descriptions-item label="客户">{{ order.customerName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="要求发货时间">
             {{ formatDateTime(order.expectShipTime) }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="order.reverseOfId" label="红冲原单">
+            <el-button link type="primary" @click="goOrder(order.reverseOfId)">
+              #{{ order.reverseOfId }}
+            </el-button>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="order.reversedById" label="红冲单">
+            <el-button link type="danger" @click="goOrder(order.reversedById)">
+              #{{ order.reversedById }}
+            </el-button>
           </el-descriptions-item>
           <el-descriptions-item label="需求总量">{{ order.totalQty ?? 0 }}</el-descriptions-item>
           <el-descriptions-item label="已分配">{{ order.allocatedQty ?? 0 }}</el-descriptions-item>
