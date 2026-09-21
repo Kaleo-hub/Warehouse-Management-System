@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.inventory.mapper.StocktakingOrderItemMapper">
+
+    <select id="selectByOrderId" resultType="com.myproject.wmsserver.inventory.vo.StocktakingOrderItemVO">
+        SELECT id, inventory_id, sku_id, sku_code, sku_name, batch_no,
+               system_qty, locked_qty, frozen_qty, actual_qty, diff_qty, remark
+        FROM stocktaking_order_item
+        WHERE order_id = #{orderId}
+          AND deleted = 0
+        ORDER BY id ASC
+    </select>
+</mapper>

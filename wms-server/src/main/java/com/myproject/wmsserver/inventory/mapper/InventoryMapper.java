@@ -9,6 +9,7 @@ import com.myproject.wmsserver.inventory.vo.InventoryGroupVO;
 import com.myproject.wmsserver.inventory.vo.InventorySummaryVO;
 import com.myproject.wmsserver.inventory.vo.InventoryVO;
 import com.myproject.wmsserver.inventory.vo.ReconcileVO;
+import com.myproject.wmsserver.inventory.vo.StocktakingCandidateVO;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
@@ -148,4 +149,8 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
                       @Param("lockedQty") int lockedQty,
                       @Param("frozenQty") int frozenQty,
                       @Param("version") int version);
+
+    /** 建盘点单时快照一个库位下所有库存行。 */
+    List<StocktakingCandidateVO> selectStocktakingCandidates(@Param("locationId") Long locationId);
+
 }

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.myproject.wmsserver.inventory.mapper.TransferOrderMapper">
+
+    <select id="selectOrderPage" resultType="com.myproject.wmsserver.inventory.vo.TransferOrderVO">
+        SELECT o.id, o.order_no, o.warehouse_id, w.name AS warehouse_name,
+               o.from_location_id, o.from_location_code,
+               o.to_location_id, o.to_location_code,
+               o.status, o.total_qty, o.remark, o.transfer_time,
+               o.create_time, o.update_time
+        FROM transfer_order o
+                 LEFT JOIN warehouse w ON w.id = o.warehouse_id AND w.deleted = 0
+        WHERE o.deleted = 0
+        <if test="query.keyword != null and query.keyword != ''">
+            AND (o.order_no LIKE CONCAT('%', #{query.keyword}, '%')
+                 OR o.from_location_code LIKE CONCAT('%', #{query.keyword}, '%')
+                 OR o.to_location_code LIKE CONCAT('%', #{query.keyword}, '%'))
+        </if>
+        <if test="query.warehouseId != null">
+            AND o.warehouse_id = #{query.warehouseId}
+        </if>
+        <if test="query.fromLocationId != null">
+            AND o.from_location_id = #{query.fromLocationId}
+        </if>
+        <if test="query.toLocationId != null">
+            AND o.to_location_id = #{query.toLocationId}
+        </if>
+        <if test="query.status != null and query.status != ''">
+            AND o.status = #{query.status}
+        </if>
+        <if test="query.beginTime != null">
+            AND o.create_time &gt;= #{query.beginTime}
+        </if>
+        <if test="query.endTime != null">
+            AND o.create_time &lt; DATE_ADD(#{query.endTime}, INTERVAL 1 DAY)
+        </if>
+        ORDER BY FIELD(o.status, 'CREATED', 'COMPLETED', 'CANCELLED') ASC, o.id DESC
+    </select>
+
+    <select id="selectOrderDetail" resultType="com.myproject.wmsserver.inventory.vo.TransferOrderVO">
+        SELECT o.id, o.order_no, o.warehouse_id, w.name AS warehouse_name,
+               o.from_location_id, o.from_location_code,
+               o.to_location_id, o.to_location_code,
+               o.status, o.total_qty, o.remark, o.transfer_time,
+               o.create_time, o.update_time
+        FROM transfer_order o
+                 LEFT JOIN warehouse w ON w.id = o.warehouse_id AND w.deleted = 0
+        WHERE o.id = #{id}
+          AND o.deleted = 0
+    </select>
+
+    <select id="selectForUpdate" resultType="com.myproject.wmsserver.inventory.entity.TransferOrder">
+        SELECT id, order_no, warehouse_id, from_location_id, from_location_code,
+               to_location_id, to_location_code, status, total_qty, remark,
+               transfer_time, deleted, create_time, update_time, create_by, update_by
+        FROM transfer_order
+        WHERE id = #{id}
+          AND deleted = 0
+        FOR UPDATE
+    </select>
+
+    <update id="markCompleted">
+        UPDATE transfer_order
+        SET status        = 'COMPLETED',
+            transfer_time = NOW(3),
+            update_by     = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'CREATED'
+          AND deleted = 0
+    </update>
+
+    <update id="cancel">
+        UPDATE transfer_order
+        SET status    = 'CANCELLED',
+            update_by = #{updateBy}
+        WHERE id = #{id}
+          AND status = 'CREATED'
+          AND deleted = 0
+    </update>
+</mapper>

@@ -84,3 +84,27 @@ export const inventoryApi = {
 }
 
 export default inventoryApi
+
+/** 盘点单：建单时快照一个库位的库存行，录入后批量过账。 */
+export const stocktakingOrderApi = {
+  page: (params) => request.get('/v1/inventory/stocktaking-orders', { params }),
+  detail: (id) => request.get(`/v1/inventory/stocktaking-orders/${id}`),
+  create: (payload, idempotentKey) =>
+    request.post('/v1/inventory/stocktaking-orders', payload, idempotent(idempotentKey)),
+  saveCounts: (id, payload, idempotentKey) =>
+    request.put(`/v1/inventory/stocktaking-orders/${id}/counts`, payload, idempotent(idempotentKey)),
+  post: (id, idempotentKey) =>
+    request.post(`/v1/inventory/stocktaking-orders/${id}/post`, null, idempotent(idempotentKey)),
+  cancel: (id) => request.post(`/v1/inventory/stocktaking-orders/${id}/cancel`),
+}
+
+/** 移库单：一个源库位到同仓目标库位，可包含多条 SKU/批次。 */
+export const transferOrderApi = {
+  page: (params) => request.get('/v1/inventory/transfer-orders', { params }),
+  detail: (id) => request.get(`/v1/inventory/transfer-orders/${id}`),
+  create: (payload, idempotentKey) =>
+    request.post('/v1/inventory/transfer-orders', payload, idempotent(idempotentKey)),
+  complete: (id, idempotentKey) =>
+    request.post(`/v1/inventory/transfer-orders/${id}/complete`, null, idempotent(idempotentKey)),
+  cancel: (id) => request.post(`/v1/inventory/transfer-orders/${id}/cancel`),
+}

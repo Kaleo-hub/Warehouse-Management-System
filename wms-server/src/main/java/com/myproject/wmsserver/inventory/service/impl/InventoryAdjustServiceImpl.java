@@ -100,6 +100,12 @@ public class InventoryAdjustServiceImpl implements InventoryAdjustService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void transfer(TransferDTO dto) {
+        transfer(dto, "MANUAL", null, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void transfer(TransferDTO dto, String sourceType, Long sourceId, String sourceNo) {
         if (dto.getFromLocationId().equals(dto.getToLocationId())) {
             throw new BizException(InventoryErrorCode.TRANSFER_SAME_LOCATION);
         }
@@ -143,7 +149,7 @@ public class InventoryAdjustServiceImpl implements InventoryAdjustService {
                 .batchNo(source.getBatchNo())
                 .qtyChange(-qty)
                 .txType(InventoryTxType.TRANSFER_OUT)
-                .sourceType("MANUAL")
+                .sourceType(sourceType).sourceId(sourceId).sourceNo(sourceNo)
                 .remark(dto.getRemark())
                 .createIfAbsent(false)
                 .build());
@@ -158,7 +164,7 @@ public class InventoryAdjustServiceImpl implements InventoryAdjustService {
                 .batchNo(source.getBatchNo())
                 .qtyChange(qty)
                 .txType(InventoryTxType.TRANSFER_IN)
-                .sourceType("MANUAL")
+                .sourceType(sourceType).sourceId(sourceId).sourceNo(sourceNo)
                 .remark(dto.getRemark())
                 .productionDate(source.getProductionDate())
                 .expiryDate(source.getExpiryDate())
@@ -180,8 +186,19 @@ public class InventoryAdjustServiceImpl implements InventoryAdjustService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public StocktakingResultVO stocktake(StocktakingDTO dto) {
+        return stocktakeInternal(dto, "STOCKTAKING", null, null, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public StocktakingResultVO stocktakeForOrder(StocktakingDTO dto, Long orderId, String orderNo, int expectedSystemQty) {
+        return stocktakeInternal(dto, "STOCKTAKING_ORDER", orderId, orderNo, expectedSystemQty);
+    }
+
+    private StocktakingResultVO stocktakeInternal(StocktakingDTO dto, String sourceType,
+                                              Long sourceId, String sourceNo, Integer expectedSystemQty) {
         String batchNo = normalizeBatchNo(dto.getBatchNo());
-        Inventory inventory = inventoryMapper.selectByBusinessKey(
+        Inventory inventory = inventoryMapper.selectForUpdate(
                 dto.getLocationId(), dto.getSkuId(), batchNo);
         if (inventory == null) {
             log.warn("盘点失败：库存不存在 locationId={} skuId={} batchNo={}",
@@ -190,6 +207,11 @@ public class InventoryAdjustServiceImpl implements InventoryAdjustService {
         }
 
         int systemQty = nz(inventory.getQty());
+        if (expectedSystemQty != null && systemQty != expectedSystemQty) {
+            log.warn("盘点期间库存发生变化 inventoryId={} 建单快照={} 当前={}",
+                    inventory.getId(), expectedSystemQty, systemQty);
+            throw new BizException(InventoryErrorCode.STOCKTAKING_SNAPSHOT_CHANGED);
+        }
         int actualQty = nz(dto.getActualQty());
         int diff = actualQty - systemQty;
 
@@ -229,7 +251,7 @@ public class InventoryAdjustServiceImpl implements InventoryAdjustService {
                 .batchNo(inventory.getBatchNo())
                 .qtyChange(diff)
                 .txType(txType)
-                .sourceType("STOCKTAKING")
+                .sourceType(sourceType).sourceId(sourceId).sourceNo(sourceNo)
                 .remark(dto.getRemark() == null
                         ? "盘点：系统 " + systemQty + " 实盘 " + actualQty
                         : dto.getRemark())

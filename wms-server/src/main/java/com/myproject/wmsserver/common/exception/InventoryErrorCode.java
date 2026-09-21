@@ -37,7 +37,13 @@ public enum InventoryErrorCode implements ErrorCode {
     FREEZE_NOT_ENOUGH(50010, "可解冻数量不足"),
 
     /** 移库限定在同一仓库内；跨仓库要走出库 + 入库单据，不是「挪个位置」 */
-    TRANSFER_CROSS_WAREHOUSE(50011, "只能在同一仓库内移库");
+    TRANSFER_CROSS_WAREHOUSE(50011, "只能在同一仓库内移库"),
+
+    /** 盘点单还有明细未录入实盘数量，不能过账 */
+    STOCKTAKING_ITEM_INCOMPLETE(50012, "还有盘点明细未录入实盘数量"),
+
+    /** 盘点期间库存余额发生变化，旧快照不能直接过账 */
+    STOCKTAKING_SNAPSHOT_CHANGED(50013, "盘点期间库存已变化，请刷新后重新盘点");
 
     private final int code;
     private final String message;

@@ -37,11 +37,17 @@ public interface InventoryAdjustService {
      */
     void transfer(TransferDTO dto);
 
+    /** 带来源单据信息的移库，供移库单批量过账调用。 */
+    void transfer(TransferDTO dto, String sourceType, Long sourceId, String sourceNo);
+
     /**
      * 盘点：传实盘数量，后端算差异。
      * 盘盈 +diff、盘亏 -diff，各写一条流水；账实相同时不写流水。
      */
     StocktakingResultVO stocktake(StocktakingDTO dto);
+
+    /** 带快照校验和来源单据信息的盘点，供盘点单过账调用。 */
+    StocktakingResultVO stocktakeForOrder(StocktakingDTO dto, Long orderId, String orderNo, int expectedSystemQty);
 
     /**
      * 对账：按流水重算库存余额，和 inventory 表上的 qty 比对（BR-009）。

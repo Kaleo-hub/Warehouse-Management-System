@@ -444,4 +444,15 @@
           AND version = #{version}
           AND deleted = 0
     </update>
+
+    <select id="selectStocktakingCandidates" resultType="com.myproject.wmsserver.inventory.vo.StocktakingCandidateVO">
+        SELECT i.id AS inventory_id, i.sku_id, p.sku_code, p.name AS sku_name,
+               i.batch_no, i.qty AS system_qty, i.locked_qty, i.frozen_qty
+        FROM inventory i
+                 LEFT JOIN product p ON p.id = i.sku_id AND p.deleted = 0
+        WHERE i.location_id = #{locationId}
+          AND i.deleted = 0
+        ORDER BY i.sku_id ASC, i.batch_no ASC, i.id ASC
+    </select>
+
 </mapper>
