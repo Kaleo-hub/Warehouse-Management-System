@@ -2,16 +2,21 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowDown } from '@element-plus/icons-vue'
-import { menuGroups } from '../menu'
+import { menuGroupsForRole } from '../menu'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { getStoredMenuGroups, setStoredMenuGroups } from '@/utils/storage'
 
 const route = useRoute()
 const app = useAppStore()
+const auth = useAuthStore()
 const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.0'
 
 /** 移动端不做图标折叠，一律展开文字 */
 const collapsed = computed(() => !app.isMobile && app.sidebarCollapsed)
+
+/** 按当前角色过滤后的菜单：角色看不到的模块直接不渲染 */
+const groups = computed(() => menuGroupsForRole(auth.role))
 
 /**
  * 侧边栏分组折叠。
@@ -20,7 +25,11 @@ const collapsed = computed(() => !app.isMobile && app.sidebarCollapsed)
  * 全部铺开要滚一屏，「找入口」比「点进去」还费劲。
  * 折叠之后默认只展开「当前页所在的那个模块」，一屏能看全所有模块名。
  *
- * 状态存在 localStorage 里：手点开的分组刷新后还是开的，不用每次重新点。
+ * 【为什么按名字存而不是按下标】菜单是按角色过滤的，
+ * 不同角色拿到的分组下标不一样：管理员存的 3 可能指「出库管理」，
+ * 到了作业员那儿 3 就是别的模块了。存名字（"库存管理"）就没这个问题。
+ *
+ * 状态存在 localStorage 里：手点开的分组刷新后还是开的。
  * 路由变化时会自动把当前页所在的分组补进展开列表（但不会收起别人 ——
  * 如果切个页面就把用户刚展开的分组关掉，那是帮倒忙）。
  */
@@ -30,45 +39,45 @@ function isActive(path) {
   return route.path === path || route.path.startsWith(path + '/')
 }
 
-function hasActiveItem(index) {
-  return menuGroups[index].items.some((item) => isActive(item.path))
+function hasActiveItem(group) {
+  return group.items.some((item) => isActive(item.path))
 }
 
-/** 只有一个入口的分组（概览 / 系统）不折叠：折它没有意义，还多一次点击 */
-function isCollapsible(index) {
-  return menuGroups[index].items.length > 1
+/** 只有一个入口的分组（概览）不折叠：折它没有意义，还多一次点击 */
+function isCollapsible(group) {
+  return group.items.length > 1
 }
 
-function isGroupOpen(index) {
+function isGroupOpen(group) {
   // 图标条模式下没有分组标题可点，所有入口都要露出来
   if (collapsed.value) return true
-  if (!isCollapsible(index)) return true
-  return openGroups.value.includes(index)
+  if (!isCollapsible(group)) return true
+  return openGroups.value.includes(group.title)
 }
 
 function persist() {
   setStoredMenuGroups(openGroups.value)
 }
 
-function toggleGroup(index) {
-  if (!isCollapsible(index)) return
-  openGroups.value = openGroups.value.includes(index)
-    ? openGroups.value.filter((it) => it !== index)
-    : [...openGroups.value, index]
+function toggleGroup(group) {
+  if (!isCollapsible(group)) return
+  openGroups.value = openGroups.value.includes(group.title)
+    ? openGroups.value.filter((title) => title !== group.title)
+    : [...openGroups.value, group.title]
   persist()
 }
 
 function syncOpenGroups() {
   const next = new Set(openGroups.value)
-  menuGroups.forEach((group, index) => {
-    if (group.items.some((item) => isActive(item.path))) next.add(index)
+  groups.value.forEach((group) => {
+    if (hasActiveItem(group)) next.add(group.title)
   })
   openGroups.value = [...next]
   persist()
 }
 
 watch(
-  () => route.path,
+  () => [route.path, auth.role],
   () => {
     app.closeMobileSidebar()
     syncOpenGroups()
@@ -117,22 +126,22 @@ watch(
     </div>
 
     <nav class="sidebar__nav">
-      <div v-for="(group, index) in menuGroups" :key="group.title" class="nav-group">
+      <div v-for="group in groups" :key="group.title" class="nav-group">
         <!-- 图标条模式没有文字，用一条分隔线代替分组标题 -->
         <div v-if="collapsed" class="nav-group__divider"></div>
 
         <!-- 可折叠：整行就是按钮，点标题展开 / 收起 -->
         <button
-          v-else-if="isCollapsible(index)"
+          v-else-if="isCollapsible(group)"
           type="button"
           class="nav-group__toggle"
-          :class="{ 'is-open': isGroupOpen(index) }"
-          :aria-expanded="isGroupOpen(index)"
-          @click="toggleGroup(index)"
+          :class="{ 'is-open': isGroupOpen(group) }"
+          :aria-expanded="isGroupOpen(group)"
+          @click="toggleGroup(group)"
         >
           <span class="nav-group__title">{{ group.title }}</span>
           <span
-            v-if="hasActiveItem(index) && !isGroupOpen(index)"
+            v-if="hasActiveItem(group) && !isGroupOpen(group)"
             class="nav-group__dot"
             aria-hidden="true"
           ></span>
@@ -143,7 +152,7 @@ watch(
         <p v-else class="nav-group__title nav-group__title--static">{{ group.title }}</p>
 
         <el-collapse-transition>
-          <div v-show="isGroupOpen(index)" class="nav-group__items">
+          <div v-show="isGroupOpen(group)" class="nav-group__items">
             <template v-for="item in group.items" :key="item.path">
               <router-link
                 v-if="!item.soon"

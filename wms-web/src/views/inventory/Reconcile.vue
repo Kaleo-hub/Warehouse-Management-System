@@ -4,11 +4,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { toastError } from '@/utils/error'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { inventoryApi } from '@/api/inventory'
+import { useIdempotentKey } from '@/composables/useIdempotentKey'
 
 const checking = ref(false)
 const fixing = ref(false)
 const result = ref(null)
 const lastRunAt = ref('')
+/** 幂等键：每次点「开始对账 / 按流水修正」算一次动作 */
+const idempotentKey = useIdempotentKey()
 
 const mismatches = computed(() => result.value?.mismatches ?? [])
 const hasMismatch = computed(() => Number(result.value?.mismatchCount ?? 0) > 0)
@@ -61,7 +64,8 @@ async function runCheck() {
   if (checking.value) return
   checking.value = true
   try {
-    result.value = await inventoryApi.reconcile(false)
+    result.value = await inventoryApi.reconcile(false, idempotentKey.value)
+    idempotentKey.reset()
     lastRunAt.value = stamp()
     if (!hasMismatch.value) {
       ElMessage.success(`对账完成：${result.value.checkedCount} 条库存全部与流水一致`)
@@ -90,7 +94,8 @@ async function runFix() {
 
   fixing.value = true
   try {
-    const data = await inventoryApi.reconcile(true)
+    const data = await inventoryApi.reconcile(true, idempotentKey.value)
+    idempotentKey.reset()
     result.value = data
     lastRunAt.value = stamp()
     if (data.fixedCount > 0) {

@@ -6,6 +6,7 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 import LineItemsEditor from '@/components/form/LineItemsEditor.vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { outboundApi } from '@/api/outbound'
+import { useIdempotentKey } from '@/composables/useIdempotentKey'
 import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
 import { useSkuOptions } from '@/composables/useSkuOptions'
 import { toastError } from '@/utils/error'
@@ -14,6 +15,8 @@ const router = useRouter()
 const formRef = ref(null)
 const itemsRef = ref(null)
 const submitting = ref(false)
+/** 幂等键：同一次创建动作只建一张单，理由见 InboundOrderCreate */
+const idempotentKey = useIdempotentKey()
 
 const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions()
 const { options: skuOptions, load: loadSkus } = useSkuOptions()
@@ -67,7 +70,8 @@ async function handleSubmit() {
       })),
     }
 
-    const id = await outboundApi.create(payload)
+        const id = await outboundApi.create(payload, idempotentKey.value)
+    idempotentKey.reset()
     ElMessage.success('出库单创建成功')
     router.replace(id ? `/outbound/orders/${id}` : '/outbound/orders')
   } catch (error) {

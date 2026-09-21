@@ -139,6 +139,17 @@ const formRef = ref(null)
 const form = reactive({})
 
 const isEdit = computed(() => editingId.value !== null)
+
+/**
+ * 表单可见字段。
+ *
+ * 有些字段只该出现在「新建」里 —— 最典型的是初始密码：
+ * 编辑用户时不该出现密码框（改密码走单独的重置接口）。
+ * 用字段上的 createOnly 标记，而不是让每个页面自己去写两套表单。
+ */
+const visibleFormFields = computed(() =>
+  props.formFields.filter((field) => !(field.createOnly && isEdit.value)),
+)
 const drawerTitle = computed(() => `${isEdit.value ? '编辑' : '新建'}${props.entityName}`)
 
 const rules = computed(() => {
@@ -191,6 +202,17 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const payload = { ...form }
+
+    /*
+     * omitIfEmpty 的字段：留空就不提交。
+     * 典型场景是「编辑用户」时密码框本该为空 ——
+     * 传空串过去会被后端 @Size(min = 6) 判成非法，整个保存失败；
+     * 但后端确实也不该拿它，所以最好的处理是根本不传。
+     */
+    props.formFields.forEach((field) => {
+      if (field.omitIfEmpty && payload[field.prop] === '') delete payload[field.prop]
+    })
+
     if (isEdit.value) {
       await props.api.update(editingId.value, payload)
       ElMessage.success('保存成功')
@@ -427,7 +449,7 @@ defineExpose({ reload: load, openCreate })
         class="crud__form"
       >
         <el-form-item
-          v-for="field in formFields"
+          v-for="field in visibleFormFields"
           :key="field.prop"
           :label="field.label"
           :prop="field.prop"
@@ -438,6 +460,7 @@ defineExpose({ reload: load, openCreate })
               v-model="form[field.prop]"
               :placeholder="field.placeholder || `请输入${field.label}`"
               :maxlength="field.maxlength"
+              :disabled="isEdit && field.disabledOnEdit"
               show-word-limit
               clearable
             />
@@ -456,6 +479,7 @@ defineExpose({ reload: load, openCreate })
               :min="field.min ?? 0"
               :max="field.max"
               :step="field.step || 1"
+              :disabled="isEdit && field.disabledOnEdit"
               controls-position="right"
               style="width: 100%"
             />
@@ -463,6 +487,7 @@ defineExpose({ reload: load, openCreate })
               v-else-if="field.type === 'select'"
               v-model="form[field.prop]"
               :placeholder="field.placeholder || `请选择${field.label}`"
+              :disabled="isEdit && field.disabledOnEdit"
               clearable
               style="width: 100%"
             >

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { toastError } from '@/utils/error'
 import { inboundApi } from '@/api/inbound'
+import { useIdempotentKey } from '@/composables/useIdempotentKey'
 
 /**
  * 收货登记。
@@ -19,6 +20,12 @@ const emit = defineEmits(['update:modelValue', 'success'])
 
 const rows = ref([])
 const submitting = ref(false)
+/**
+ * 幂等键：一次「收货动作」一个键。
+ * 收货是允许分批的，所以键不能只用单据 id —— 那样第二批货也会被当成重复提交。
+ * 这里每提交成功一次就换一个新键。
+ */
+const idempotentKey = useIdempotentKey()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -102,7 +109,8 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await inboundApi.receive(props.order.id, { items })
+    await inboundApi.receive(props.order.id, { items }, idempotentKey.value)
+    idempotentKey.reset()
     ElMessage.success('收货登记成功')
     visible.value = false
     emit('success')

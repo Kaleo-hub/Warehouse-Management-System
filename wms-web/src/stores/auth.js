@@ -19,6 +19,20 @@ export const useAuthStore = defineStore('auth', () => {
   const roleName = computed(() => roleLabel(user.value?.role))
   const roleTag = computed(() => roleTagType(user.value?.role))
   const initial = computed(() => (user.value?.realName || user.value?.username || '?').slice(0, 1))
+  const role = computed(() => user.value?.role || '')
+  const isAdmin = computed(() => role.value === 'ADMIN')
+
+  /**
+   * 角色判断。前端用它控制「菜单/按钮显不显示」。
+   *
+   * 【注意】前端过滤只是体验优化，不是安全边界 ——
+   * 隐藏菜单挡不住直接敲 URL 或直接发请求的人，
+   * 真正的防线是后端的 @PreAuthorize。两层都要有：
+   * 后端保证「干不了」，前端保证「看不到、不用点」。
+   */
+  function hasRole(...roles) {
+    return roles.includes(role.value)
+  }
 
   /**
    * 登录：调用真实接口 POST /api/v1/auth/login
@@ -47,6 +61,9 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     token,
     user,
+    role,
+    isAdmin,
+    hasRole,
     isLoggedIn,
     displayName,
     roleName,

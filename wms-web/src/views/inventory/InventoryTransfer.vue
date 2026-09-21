@@ -8,6 +8,7 @@ import InventoryRowPicker from '@/components/form/InventoryRowPicker.vue'
 import { inventoryApi } from '@/api/inventory'
 import { locationApi } from '@/api/basedata'
 import { fetchAllOptions } from '@/utils/loadAllOptions'
+import { useIdempotentKey } from '@/composables/useIdempotentKey'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +17,8 @@ const formRef = ref(null)
 const form = reactive({ source: null, toLocationId: null, qty: 1, remark: '' })
 
 const submitting = ref(false)
+/** 幂等键：一次移库动作一个键；成功后换新的，下一次移库才是新动作 */
+const idempotentKey = useIdempotentKey()
 const loadingSource = ref(false)
 const locationLoading = ref(false)
 const locationOptions = ref([])
@@ -125,7 +128,8 @@ async function submit() {
       batchNo: fromRow.batchNo,
       qty,
       remark: form.remark,
-    })
+    }, idempotentKey.value)
+    idempotentKey.reset()
 
     // 移完再查一次源行：界面上显示的数字必须是数据库里的真实值，不是「我以为减掉了」
     const refreshed = await inventoryApi.detail(fromRow.id)

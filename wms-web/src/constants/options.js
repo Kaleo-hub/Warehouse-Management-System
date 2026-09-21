@@ -10,6 +10,30 @@ export const STATUS_TAG = {
   DISABLED: { text: '停用', type: 'info' },
 }
 
+/* ---------- 用户角色（对应后端 system/enums/UserRole） ---------- */
+export const ROLE_OPTIONS = [
+  { label: '系统管理员', value: 'ADMIN' },
+  { label: '仓库主管', value: 'MANAGER' },
+  { label: '作业员', value: 'OPERATOR' },
+]
+
+export const ROLE_TAG = {
+  ADMIN: { text: '系统管理员', type: 'danger' },
+  MANAGER: { text: '仓库主管', type: 'warning' },
+  OPERATOR: { text: '作业员', type: 'primary' },
+}
+
+/* ---------- 用户状态：sys_user.status 是 tinyint（1/0），不是 ENABLED/DISABLED ---------- */
+export const USER_STATUS_OPTIONS = [
+  { label: '启用', value: 1 },
+  { label: '停用', value: 0 },
+]
+
+export const USER_STATUS_TAG = {
+  1: { text: '启用', type: 'success' },
+  0: { text: '停用', type: 'info' },
+}
+
 export const ZONE_TYPE_OPTIONS = [
   { label: '存储区', value: 'STORAGE' },
   { label: '拣货区', value: 'PICKING' },

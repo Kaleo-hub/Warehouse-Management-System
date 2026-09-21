@@ -1,4 +1,4 @@
-import request from './request'
+import request, { idempotent } from './request'
 
 /**
  * 库存接口。
@@ -22,29 +22,36 @@ export const inventoryApi = {
   transactionDetail: (id) => request.get(`/v1/inventory/transactions/${id}`),
 
   /** 冻结：frozen_qty +qty。货还在库，可用数量变少，不可分配也不可移库 */
-  freeze: (id, qty) => request.post(`/v1/inventory/inventories/${id}/freeze`, { qty }),
+  freeze: (id, qty, idempotentKey) =>
+    request.post(`/v1/inventory/inventories/${id}/freeze`, { qty }, idempotent(idempotentKey)),
 
   /** 解冻：frozen_qty -qty，可用数量恢复 */
-  unfreeze: (id, qty) => request.post(`/v1/inventory/inventories/${id}/unfreeze`, { qty }),
+  unfreeze: (id, qty, idempotentKey) =>
+    request.post(`/v1/inventory/inventories/${id}/unfreeze`, { qty }, idempotent(idempotentKey)),
 
   /**
    * 移库：把某库位某批次挪到同仓库的另一个库位。
    * 一个事务里转出 -n、转入 +n，服务端失败会整体回滚。
    */
-  transfer: (payload) => request.post('/v1/inventory/transfers', payload),
+  transfer: (payload, idempotentKey) =>
+    request.post('/v1/inventory/transfers', payload, idempotent(idempotentKey)),
 
   /**
    * 盘点：传实盘数量（不是差异），后端自己算差异并写盘盈 / 盘亏流水。
    * 返回 { systemQty, actualQty, diffQty, txType, changed }。
    */
-  stocktake: (payload) => request.post('/v1/inventory/stocktakings', payload),
+  stocktake: (payload, idempotentKey) =>
+    request.post('/v1/inventory/stocktakings', payload, idempotent(idempotentKey)),
 
   /**
    * 对账：按流水重算库存余额（BR-009）。
    * autoFix=false 只检查不改数；true 会把余额改成按流水重算出来的值。
    */
-  reconcile: (autoFix = false) =>
-    request.post('/v1/inventory/reconcile', null, { params: { autoFix } }),
+  reconcile: (autoFix = false, idempotentKey) =>
+    request.post('/v1/inventory/reconcile', null, {
+      params: { autoFix },
+      ...(idempotent(idempotentKey) || {}),
+    }),
 
   /**
    * 库存总览（工作台看板）。

@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { toastError } from '@/utils/error'
 import PageHeading from '@/components/common/PageHeading.vue'
 import InventoryRowPicker from '@/components/form/InventoryRowPicker.vue'
+import { useIdempotentKey } from '@/composables/useIdempotentKey'
 import { inventoryApi } from '@/api/inventory'
 
 const route = useRoute()
@@ -15,6 +16,8 @@ const form = reactive({ source: null, actualQty: null, remark: '' })
 
 const loadingSource = ref(false)
 const submitting = ref(false)
+/** 幂等键：一次盘点动作一个键（同一次提交重复发，只会记一次差异） */
+const idempotentKey = useIdempotentKey()
 const result = ref(null)
 
 /**
@@ -104,7 +107,8 @@ async function submit() {
       batchNo: form.source.batchNo,
       actualQty: Number(form.actualQty),
       remark: form.remark,
-    })
+    }, idempotentKey.value)
+    idempotentKey.reset()
     result.value = data
 
     // 盘完立刻回查一次，界面上的数字必须来自数据库

@@ -24,25 +24,25 @@ export const routes = [
         path: 'basedata/warehouses',
         name: 'WarehouseList',
         component: () => import('@/views/basedata/WarehouseView.vue'),
-        meta: { title: '仓库管理', breadcrumb: ['基础数据', '仓库管理'] },
+        meta: { title: '仓库管理', breadcrumb: ['基础数据', '仓库管理'], roles: ['ADMIN', 'MANAGER'] },
       },
       {
         path: 'basedata/zones',
         name: 'ZoneList',
         component: () => import('@/views/basedata/ZoneView.vue'),
-        meta: { title: '库区管理', breadcrumb: ['基础数据', '库区管理'] },
+        meta: { title: '库区管理', breadcrumb: ['基础数据', '库区管理'], roles: ['ADMIN', 'MANAGER'] },
       },
       {
         path: 'basedata/locations',
         name: 'LocationList',
         component: () => import('@/views/basedata/LocationView.vue'),
-        meta: { title: '库位管理', breadcrumb: ['基础数据', '库位管理'] },
+        meta: { title: '库位管理', breadcrumb: ['基础数据', '库位管理'], roles: ['ADMIN', 'MANAGER'] },
       },
       {
         path: 'basedata/products',
         name: 'ProductList',
         component: () => import('@/views/basedata/ProductView.vue'),
-        meta: { title: '商品管理', breadcrumb: ['基础数据', '商品管理'] },
+        meta: { title: '商品管理', breadcrumb: ['基础数据', '商品管理'], roles: ['ADMIN', 'MANAGER'] },
       },
 
       /* ---------------- 入库 ---------------- */
@@ -128,19 +128,27 @@ export const routes = [
         path: 'inventory/transfer',
         name: 'InventoryTransfer',
         component: () => import('@/views/inventory/InventoryTransfer.vue'),
-        meta: { title: '库存移库', breadcrumb: ['库存管理', '库存移库'] },
+        meta: { title: '库存移库', breadcrumb: ['库存管理', '库存移库'], roles: ['ADMIN', 'MANAGER'] },
       },
       {
         path: 'inventory/stocktaking',
         name: 'Stocktaking',
         component: () => import('@/views/inventory/Stocktaking.vue'),
-        meta: { title: '库存盘点', breadcrumb: ['库存管理', '库存盘点'] },
+        meta: { title: '库存盘点', breadcrumb: ['库存管理', '库存盘点'], roles: ['ADMIN', 'MANAGER'] },
       },
       {
         path: 'inventory/reconcile',
         name: 'Reconcile',
         component: () => import('@/views/inventory/Reconcile.vue'),
-        meta: { title: '库存对账', breadcrumb: ['库存管理', '库存对账'] },
+        meta: { title: '库存对账', breadcrumb: ['库存管理', '库存对账'], roles: ['ADMIN', 'MANAGER'] },
+      },
+
+      /* ---------------- 系统 ---------------- */
+      {
+        path: 'system/users',
+        name: 'UserList',
+        component: () => import('@/views/system/UserView.vue'),
+        meta: { title: '用户管理', breadcrumb: ['系统', '用户管理'], roles: ['ADMIN'] },
       },
     ],
   },

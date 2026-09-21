@@ -7,6 +7,7 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 import LineItemsEditor from '@/components/form/LineItemsEditor.vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { inboundApi } from '@/api/inbound'
+import { useIdempotentKey } from '@/composables/useIdempotentKey'
 import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
 import { useSkuOptions } from '@/composables/useSkuOptions'
 
@@ -14,6 +15,11 @@ const router = useRouter()
 const formRef = ref(null)
 const itemsRef = ref(null)
 const submitting = ref(false)
+/**
+ * 幂等键：进入页面时生成一次。
+ * 双击提交、超时重试都用它 —— 服务端凭它认出「这是同一次创建动作」，只建一张单。
+ */
+const idempotentKey = useIdempotentKey()
 
 const { options: warehouseOptions, load: loadWarehouses } = useWarehouseOptions()
 const { options: skuOptions, load: loadSkus } = useSkuOptions()
@@ -66,7 +72,9 @@ async function handleSubmit() {
       })),
     }
 
-    const id = await inboundApi.create(payload)
+        // 幂等键：页面打开时生成一次，双击提交 / 失败重试都用它，成功后换新的
+    const id = await inboundApi.create(payload, idempotentKey.value)
+    idempotentKey.reset()
     ElMessage.success('入库单创建成功')
     router.replace(id ? `/inbound/orders/${id}` : '/inbound/orders')
   } catch (error) {

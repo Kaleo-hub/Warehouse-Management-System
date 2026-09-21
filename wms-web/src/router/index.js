@@ -1,3 +1,4 @@
+import { ElMessage } from 'element-plus'
 import { createRouter, createWebHistory } from 'vue-router'
 import { routes } from './routes'
 import { pinia } from '@/stores'
@@ -26,6 +27,19 @@ router.beforeEach((to) => {
       path: '/login',
       query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : undefined,
     }
+  }
+
+  /*
+   * 页面级权限：路由 meta.roles 声明了角色就校验。
+   *
+   * 【为什么前端也要挡一道】后端已经用 @PreAuthorize 挡住了接口，
+   * 但作业员手敲 /system/users 还是能看到一个空壳页面、点啥都报错，
+   * 体验上像是「页面坏了」。这里直接送回工作台并说明原因。
+   * 记住这【不是】安全边界 —— 真正的边界在后端。
+   */
+  if (to.meta.roles?.length && !auth.hasRole(...to.meta.roles)) {
+    ElMessage.warning('当前角色没有权限访问该页面')
+    return { path: '/dashboard' }
   }
 
   return true

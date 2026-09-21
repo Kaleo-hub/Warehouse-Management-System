@@ -79,12 +79,17 @@ export function setStoredTheme(theme) {
 }
 
 /* ---------- 侧边栏展开的模块 ---------- */
+/**
+ * 存的是分组【名字】而不是下标。
+ * 用下标的话，菜单一旦按角色过滤（不同角色看到的分组数不一样），
+ * 下标就会错位 —— 管理员存的「3」到了作业员那儿可能指到另一个模块上。
+ */
 export function getStoredMenuGroups() {
   const raw = read(MENU_GROUPS_KEY)
   if (!raw) return []
   try {
     const list = JSON.parse(raw)
-    return Array.isArray(list) ? list.filter((item) => typeof item === 'number') : []
+    return Array.isArray(list) ? list.filter((item) => typeof item === 'string') : []
   } catch {
     return []
   }

@@ -26,6 +26,16 @@ export function getLastTraceId() {
   return lastTraceId
 }
 
+/**
+ * 构造带幂等键的请求配置。
+ *
+ * 幂等键走请求头 X-Idempotent-Key，和后端 common/idempotent 的约定一致。
+ * key 为空就退化成普通请求（后端还有「业务键 + 请求体哈希」兜底，不至于完全没保护）。
+ */
+export function idempotent(key) {
+  return key ? { headers: { 'X-Idempotent-Key': key } } : undefined
+}
+
 const service = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 15000,

@@ -1,4 +1,4 @@
-import request from './request'
+import request, { idempotent } from './request'
 
 /**
  * 出库单。动作型接口遵循 docs/02 第 4.1 节的 /{id}/{action} 命名。
@@ -17,7 +17,8 @@ export const outboundApi = {
   detail: (id) => request.get(`${base}/${id}`),
 
   /** 创建：单头 + items 明细数组 */
-  create: (payload) => request.post(base, payload),
+  /** 创建出库单。理由同入库单创建 */
+  create: (payload, idempotentKey) => request.post(base, payload, idempotent(idempotentKey)),
 
   /** 分配库存（FIFO）。任一明细可用量不够就整单回滚 */
   allocate: (id) => request.post(`${base}/${id}/allocate`),

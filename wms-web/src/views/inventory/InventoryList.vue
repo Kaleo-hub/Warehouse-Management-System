@@ -7,6 +7,7 @@ import CrudTable from '@/components/crud/CrudTable.vue'
 import PageHeading from '@/components/common/PageHeading.vue'
 import { inventoryApi } from '@/api/inventory'
 import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
+import { useIdempotentKey } from '@/composables/useIdempotentKey'
 
 const router = useRouter()
 const tableRef = ref(null)
@@ -48,6 +49,8 @@ const freezeMode = ref('freeze')
 const freezeRow = ref(null)
 const freezeQty = ref(1)
 const freezing = ref(false)
+/** 幂等键：每次打开冻结/解冻弹窗算一次动作，成功后换新的 */
+const idempotentKey = useIdempotentKey()
 
 const freezeTitle = computed(() => (freezeMode.value === 'freeze' ? '冻结库存' : '解冻库存'))
 const freezeLimit = computed(() =>
@@ -78,12 +81,13 @@ async function submitFreeze() {
   freezing.value = true
   try {
     if (freezeMode.value === 'freeze') {
-      await inventoryApi.freeze(freezeRow.value.id, qty)
+      await inventoryApi.freeze(freezeRow.value.id, qty, idempotentKey.value)
       ElMessage.success(`已冻结 ${qty} 件，这批货不能再被分配或移库`)
     } else {
-      await inventoryApi.unfreeze(freezeRow.value.id, qty)
+      await inventoryApi.unfreeze(freezeRow.value.id, qty, idempotentKey.value)
       ElMessage.success(`已解冻 ${qty} 件，可用数量已恢复`)
     }
+    idempotentKey.reset()
     freezeVisible.value = false
     tableRef.value?.reload()
   } catch (error) {

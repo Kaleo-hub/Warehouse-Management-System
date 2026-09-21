@@ -1,11 +1,25 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, Bell, Close, Expand, Fold, FullScreen, Moon, SwitchButton, Sunny } from '@element-plus/icons-vue'
+import {
+  ArrowDown,
+  Bell,
+  Close,
+  Expand,
+  Fold,
+  FullScreen,
+  Key,
+  Moon,
+  SwitchButton,
+  Sunny,
+} from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useInventoryAlertCount } from '@/composables/useInventoryAlertCount'
+import { userApi } from '@/api/system'
 import { roleLabel } from '@/utils/format'
+import { toastError } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +27,75 @@ const app = useAppStore()
 const auth = useAuthStore()
 
 const isFullscreen = ref(Boolean(document.fullscreenElement))
+
+/*
+ * 铃铛上的数字必须是真数据。
+ * 之前这里写的是 :value="3" —— 一个永远不动的假红点，
+ * 和菜单里「不做假页面」的原则自相矛盾，而且会让人以为有 3 条待办。
+ */
+const { alertTotal, load: loadAlertCount } = useInventoryAlertCount()
+onMounted(loadAlertCount)
+
+function goAlerts() {
+  router.push('/inventory/alerts')
+}
+
+/* ---------------- 修改密码 ---------------- */
+const passwordVisible = ref(false)
+const passwordSubmitting = ref(false)
+const passwordFormRef = ref(null)
+const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
+
+const passwordRules = {
+  oldPassword: [{ required: true, message: '请输入当前密码', trigger: 'blur' }],
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, max: 32, message: '密码长度需在 6 到 32 之间', trigger: 'blur' },
+  ],
+  confirmPassword: [
+    { required: true, message: '请再输入一次新密码', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (value !== passwordForm.newPassword) callback(new Error('两次输入的新密码不一致'))
+        else callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+}
+
+function openPasswordDialog() {
+  passwordForm.oldPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirmPassword = ''
+  passwordVisible.value = true
+}
+
+async function submitPassword() {
+  if (passwordSubmitting.value) return
+  const valid = await passwordFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+
+  passwordSubmitting.value = true
+  try {
+    await userApi.changeOwnPassword({
+      oldPassword: passwordForm.oldPassword,
+      newPassword: passwordForm.newPassword,
+    })
+    passwordVisible.value = false
+    /*
+     * 这里必须说清楚：改完密码，当前这个 token 在过期前依然有效。
+     * 因为用的是无状态 JWT，服务端不存 session，没有「踢下线」的抓手 ——
+     * 想立刻失效就得引入 token 黑名单（Redis）或改短有效期，那是第 8 周的事。
+     * 不写清楚的话，用户会以为改密码等于注销了其他设备。
+     */
+    ElMessage.success('密码已修改。当前登录状态会保持到本次 token 过期')
+  } catch (error) {
+    toastError(error, '修改密码失败')
+  } finally {
+    passwordSubmitting.value = false
+  }
+}
 
 const breadcrumb = computed(() => route.meta.breadcrumb || [route.meta.title].filter(Boolean))
 const collapseIcon = computed(() => {
@@ -86,11 +169,14 @@ async function handleLogout() {
         <el-icon><component :is="app.isDark ? Sunny : Moon" /></el-icon>
       </button>
 
-      <el-badge :value="3" class="header__badge">
-        <button class="icon-btn" type="button" title="通知">
+      <el-badge v-if="alertTotal > 0" :value="alertTotal" class="header__badge">
+        <button class="icon-btn" type="button" title="库存预警" @click="goAlerts">
           <el-icon><Bell /></el-icon>
         </button>
       </el-badge>
+      <button v-else class="icon-btn" type="button" title="库存预警（当前正常）" @click="goAlerts">
+        <el-icon><Bell /></el-icon>
+      </button>
 
       <button class="icon-btn" type="button" title="全屏" @click="toggleFullscreen">
         <el-icon><component :is="isFullscreen ? Expand : FullScreen" /></el-icon>
@@ -111,9 +197,12 @@ async function handleLogout() {
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item disabled>
-              账号 {{ auth.user?.username }}
+              账号 {{ auth.user?.username }} · {{ roleLabel(auth.user?.role) }}
             </el-dropdown-item>
-            <el-dropdown-item divided :icon="SwitchButton" @click="handleLogout">
+            <el-dropdown-item divided :icon="Key" @click="openPasswordDialog">
+              修改密码
+            </el-dropdown-item>
+            <el-dropdown-item :icon="SwitchButton" @click="handleLogout">
               退出登录
             </el-dropdown-item>
           </el-dropdown-menu>
@@ -121,6 +210,33 @@ async function handleLogout() {
       </el-dropdown>
     </div>
   </header>
+
+  <!-- 修改密码 -->
+  <el-dialog v-model="passwordVisible" title="修改密码" width="420px">
+    <el-form
+      ref="passwordFormRef"
+      :model="passwordForm"
+      :rules="passwordRules"
+      label-position="top"
+    >
+      <el-form-item label="当前密码" prop="oldPassword">
+        <el-input v-model="passwordForm.oldPassword" type="password" show-password />
+      </el-form-item>
+      <el-form-item label="新密码" prop="newPassword">
+        <el-input v-model="passwordForm.newPassword" type="password" show-password />
+      </el-form-item>
+      <el-form-item label="确认新密码" prop="confirmPassword">
+        <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
+      </el-form-item>
+    </el-form>
+
+    <template #footer>
+      <el-button @click="passwordVisible = false">取消</el-button>
+      <el-button type="primary" :loading="passwordSubmitting" @click="submitPassword">
+        确认修改
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>

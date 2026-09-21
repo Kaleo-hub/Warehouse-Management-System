@@ -106,8 +106,18 @@ function changeText(row) {
   return '0'
 }
 
+/*
+ * 加载失败要显式说出来。
+ *
+ * 之前失败只在 catch 里弹一个几秒就消失的提示，页面本身会渲染成
+ * 「还没有库存数据」「暂无库存预警」—— 那是在说谎：不是没数据，是根本没拿到数据。
+ * 运维/仓库看到"空的"会以为仓库真没货，这比报错危险得多。
+ */
+const loadError = ref('')
+
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     const [s, a, tx] = await Promise.all([
       inventoryApi.summary(),
@@ -118,6 +128,7 @@ async function load() {
     alerts.value = a
     recentTransactions.value = tx?.records ?? tx?.list ?? []
   } catch (error) {
+    loadError.value = error?.message || '加载失败'
     toastError(error, '加载库存看板失败')
   } finally {
     loading.value = false
@@ -156,8 +167,17 @@ onMounted(load)
       </div>
     </section>
 
+    <!-- 加载失败：说清楚是"没拿到"，而不是"没有" -->
+    <section v-if="loadError" class="load-error">
+      <div class="load-error__text">
+        <strong>看板数据加载失败</strong>
+        <p>{{ loadError }}</p>
+      </div>
+      <el-button :icon="Refresh" @click="load">重新加载</el-button>
+    </section>
+
     <!-- 指标卡 -->
-    <section class="stats">
+    <section v-if="!loadError" class="stats">
       <article
         v-for="card in cards"
         :key="card.key"
@@ -180,7 +200,7 @@ onMounted(load)
       </article>
     </section>
 
-    <div class="dash__grid">
+    <div v-if="!loadError" class="dash__grid">
       <!-- 按仓库分布 -->
       <section class="card">
         <header class="card__head">
@@ -296,6 +316,30 @@ onMounted(load)
 
 <style scoped>
 .dash { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------- 加载失败 ---------- */
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--danger-300, #fca5a5);
+  border-radius: var(--radius-md);
+  background: var(--danger-50, #fef2f2);
+}
+
+.load-error__text strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--danger-600);
+}
+
+.load-error__text p {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
 
 /* ---------- 欢迎条 ---------- */
 .hero {
