@@ -1,6 +1,7 @@
 package com.myproject.wmsserver.outbound.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.myproject.wmsserver.basedata.service.LocationService;
 import com.myproject.wmsserver.basedata.service.ProductService;
 import com.myproject.wmsserver.basedata.vo.ProductVO;
 import com.myproject.wmsserver.common.context.UserContext;
@@ -61,6 +62,12 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
     private final ProductService productService;
     private final SequenceService sequenceService;
     private final InventoryService inventoryService;
+
+    /**
+     * 库位占用是「派生计数」：上架时加、发货/移出/盘亏时减。
+     * 跨模块只能调 Service（不能直接注入 LocationMapper），见 docs/02 的依赖方向约定。
+     */
+    private final LocationService locationService;
     private final InventoryQueryService inventoryQueryService;
 
     /* ============================ 查询 ============================ */
@@ -343,6 +350,22 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
                     .remark("出库发货")
                     .createIfAbsent(false)
                     .build());
+
+            /*
+             * 库位占用要跟着减。
+             *
+             * 上架时 increaseUsedCapacity 加了 qty，发货把货真的搬出去了，
+             * 这里就必须减回来 —— 否则每发一次货，库位就"少"了一点容量，
+             * 看板的占用率会一路偏高，最后明明空着的库位也报「容量不足」。
+             *
+             * decreaseUsedCapacity 不抛异常：已用容量只是派生计数，
+             * 万一它自己已经算错了（比如这次修复之前漏减的历史数据），
+             * 也不该把发货这个正经业务卡死 —— 它返回 false 并打 warn 日志。
+             *
+             * 注意这一步和上面的 applyChange 在同一个事务里：
+             * 后面 markShipped 失败时，库存和库位占用会一起回滚。
+             */
+            locationService.decreaseUsedCapacity(allocate.getLocationId(), qty);
         }
 
         int affected = orderMapper.markShipped(orderId, UserContext.getUserId());

@@ -93,6 +93,13 @@ class OutboundOrderServiceTest {
 
     /* ---------------------------- 工具 ---------------------------- */
 
+    /** 库位已用容量：派生计数，应该等于这个库位上所有库存行的 qty 之和 */
+    private int usedCapacity(Long locationId) {
+        Integer v = jdbcTemplate.queryForObject(
+                "SELECT used_capacity FROM location WHERE id = ?", Integer.class, locationId);
+        return v == null ? 0 : v;
+    }
+
     /** 模拟上架入库：往指定库位加一批货 */
     private void stockIn(Long locationId, String batchNo, int qty) {
         inventoryService.applyChange(InventoryChangeCommand.builder()
@@ -313,6 +320,39 @@ class OutboundOrderServiceTest {
                 "SELECT COUNT(*) FROM inventory_transaction WHERE tx_type = 'OUTBOUND_OUT' AND batch_no = ?",
                 Integer.class, BATCH_A);
         assertEquals(1, txCount, "发货必须写库存流水（BR-008）");
+    }
+
+    /**
+     * ★ 回归用例：发货必须减「库位已用容量」。
+     *
+     * ========== 这条用例是怎么来的 ==========
+     * 这个 bug 是先在真实数据里发现的：库位 A-01-01-02 的 used_capacity 是 90，
+     * 而它上面实际只有 45 件货。原因就是发货只减了 inventory.qty，
+     * 没减 location.used_capacity —— 占用率只增不减，越用越离谱。
+     *
+     * 修完之后补上这条用例，把「发货 → 占用要减」钉死：
+     * 库位占用是个派生计数（上架 +、发货/移出/盘亏 −），
+     * 任何「减少库存」的动作忘了同步它，都会在这里变红。
+     */
+    @Test
+    @DisplayName("★ 发货要减库位已用容量（回归：曾经只减库存没减占用）")
+    void shipShouldDecreaseUsedCapacity() {
+        stockIn(LOCATION_A, BATCH_A, 100);
+        // stockIn 是直接调库存内核的，不经过上架任务，所以这里手工把「上架时加的占用」补上，
+        // 让用例的起点是真实的：库位上有 100 件货，占用也记着 100。
+        jdbcTemplate.update("UPDATE location SET used_capacity = used_capacity + ? WHERE id = ?",
+                100, LOCATION_A);
+        int before = usedCapacity(LOCATION_A);
+
+        Long orderId = createOrder(40);
+        outboundOrderService.allocate(orderId);
+        pickAll(orderId);
+        outboundOrderService.ship(orderId);
+
+        assertEquals(before - 40, usedCapacity(LOCATION_A),
+                "发货把 40 件真的搬出去了，库位占用必须减 40 —— "
+                        + "只减库存不减占用的话，看板的库位占用率会一路虚高，"
+                        + "最后空库位也会报「容量不足」");
     }
 
     @Test
