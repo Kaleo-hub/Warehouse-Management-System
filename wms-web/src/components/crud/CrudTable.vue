@@ -5,6 +5,7 @@ import { toastError } from '@/utils/error'
 import { Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
 import { useAppStore } from '@/stores/app'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 /**
  * 通用 CRUD 容器：查询栏 + 工具栏 + 表格 + 分页 + 表单抽屉。
@@ -79,7 +80,7 @@ function buildQuery() {
 const query = reactive(buildQuery())
 const page = reactive({ current: 1, size: app.pageSize, total: 0 })
 const rows = ref([])
-const loading = ref(false)
+const { loading, begin, isLatest, finish } = useLatestRequest()
 
 /**
  * 把「当前查询条件 + 分页」拼成后端要的参数。
@@ -105,22 +106,24 @@ function buildParams() {
 }
 
 async function load() {
-  loading.value = true
+  const token = begin()
   try {
     const params = buildParams()
-
     const data = await props.api.page(params)
+
+    if (!isLatest(token)) return
 
     // 兼容 records / list 两种分页字段命名，后端定稿后可以删掉其中之一
     rows.value = data?.records ?? data?.list ?? []
     page.total = Number(data?.total ?? rows.value.length)
     emit('loaded', data)
   } catch (error) {
+    if (!isLatest(token)) return
     rows.value = []
     page.total = 0
     toastError(error, '加载失败')
   } finally {
-    loading.value = false
+    finish(token)
   }
 }
 

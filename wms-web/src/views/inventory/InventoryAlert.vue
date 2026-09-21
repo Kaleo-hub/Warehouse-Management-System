@@ -6,6 +6,7 @@ import { inventoryApi } from '@/api/inventory'
 import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
 import { useAppStore } from '@/stores/app'
 import { toastError } from '@/utils/error'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 /**
  * 库存预警：三类需要人工处理的情况。
@@ -15,7 +16,7 @@ import { toastError } from '@/utils/error'
  *   库位超容  —— 数据异常（正常流程不该出现），要人工核对
  */
 const app = useAppStore()
-const loading = ref(false)
+const { loading, begin, isLatest, finish } = useLatestRequest()
 const alerts = ref({ expiring: [], frozen: [], overCapacity: [], expireDays: 30 })
 const activeTab = ref('expiring')
 const expireDays = ref(app.alertDays)
@@ -50,16 +51,19 @@ function expiryText(days) {
 }
 
 async function load() {
-  loading.value = true
+  const token = begin()
   try {
-    alerts.value = await inventoryApi.alerts({
+    const data = await inventoryApi.alerts({
       expireDays: expireDays.value,
       warehouseId: warehouseId.value || undefined,
     })
+    if (!isLatest(token)) return
+    alerts.value = data
   } catch (error) {
+    if (!isLatest(token)) return
     toastError(error, '加载预警失败')
   } finally {
-    loading.value = false
+    finish(token)
   }
 }
 

@@ -29,7 +29,7 @@
             AND o.create_time &lt; DATE_ADD(#{query.endTime}, INTERVAL 1 DAY)
         </if>
         <!-- 未完成的排前面：待分配的最急 -->
-        ORDER BY (o.status IN ('SHIPPED','CLOSED','CANCELLED')) ASC, o.id DESC
+        ORDER BY (o.status IN ('SHIPPED','REVERSED','CLOSED','CANCELLED')) ASC, o.id DESC
     </select>
 
     <select id="selectOrderDetail" resultType="com.myproject.wmsserver.outbound.vo.OutboundOrderVO">

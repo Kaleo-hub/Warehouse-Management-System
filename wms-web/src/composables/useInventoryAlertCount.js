@@ -1,6 +1,7 @@
 import { ref, watch } from 'vue'
 import { inventoryApi } from '@/api/inventory'
 import { useAppStore } from '@/stores/app'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 /**
  * 库存预警条数，给顶栏的铃铛用。
@@ -14,23 +15,25 @@ import { useAppStore } from '@/stores/app'
 export function useInventoryAlertCount() {
   const app = useAppStore()
   const alertTotal = ref(0)
-  const loading = ref(false)
+  const { loading, begin, isLatest, finish } = useLatestRequest()
 
   async function load() {
-    loading.value = true
+    const token = begin()
     try {
       const data = await inventoryApi.alerts({
         expireDays: app.alertDays,
         warehouseId: app.currentWarehouseId || undefined,
       })
+      if (!isLatest(token)) return
       alertTotal.value =
         (data?.expiring?.length || 0) +
         (data?.frozen?.length || 0) +
         (data?.overCapacity?.length || 0)
     } catch {
+      if (!isLatest(token)) return
       alertTotal.value = 0
     } finally {
-      loading.value = false
+      finish(token)
     }
   }
 

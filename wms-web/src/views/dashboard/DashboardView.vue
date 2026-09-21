@@ -9,12 +9,13 @@ import { roleLabel } from '@/utils/format'
 import { TX_TYPE } from '@/constants/inbound'
 import { formatDateTime } from '@/utils/format'
 import { toastError } from '@/utils/error'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 const router = useRouter()
 const auth = useAuthStore()
 const app = useAppStore()
 
-const loading = ref(false)
+const { loading, begin, isLatest, finish } = useLatestRequest()
 const summary = ref(null)
 const alerts = ref(null)
 const recentTransactions = ref([])
@@ -118,7 +119,7 @@ function changeText(row) {
 const loadError = ref('')
 
 async function load() {
-  loading.value = true
+  const token = begin()
   loadError.value = ''
   try {
     const [s, a, tx] = await Promise.all([
@@ -126,14 +127,16 @@ async function load() {
       inventoryApi.alerts({ expireDays: app.alertDays, warehouseId: app.currentWarehouseId || undefined }),
       inventoryApi.transactions({ page: 1, size: 8, warehouseId: app.currentWarehouseId || undefined }),
     ])
+    if (!isLatest(token)) return
     summary.value = s
     alerts.value = a
     recentTransactions.value = tx?.records ?? tx?.list ?? []
   } catch (error) {
+    if (!isLatest(token)) return
     loadError.value = error?.message || '加载失败'
     toastError(error, '加载库存看板失败')
   } finally {
-    loading.value = false
+    finish(token)
   }
 }
 

@@ -7,9 +7,11 @@ import com.myproject.wmsserver.inventory.enums.InventoryTxType;
 import com.myproject.wmsserver.inventory.service.InventoryService;
 import com.myproject.wmsserver.basedata.service.LocationService;
 import com.myproject.wmsserver.outbound.dto.OutboundItemDTO;
+import com.myproject.wmsserver.outbound.dto.OutboundOrderQuery;
 import com.myproject.wmsserver.outbound.dto.OutboundOrderSaveDTO;
 import com.myproject.wmsserver.outbound.enums.OutboundStatus;
 import com.myproject.wmsserver.outbound.service.OutboundOrderService;
+import com.myproject.wmsserver.outbound.vo.OutboundOrderVO;
 import com.myproject.wmsserver.task.dto.StockTaskCompleteDTO;
 import com.myproject.wmsserver.task.dto.StockTaskQuery;
 import com.myproject.wmsserver.task.service.StockTaskService;
@@ -164,9 +166,31 @@ class OutboundReverseTest {
         assertArrayEquals(before, inventory(), "失败的红冲不能改库存");
     }
 
+    @Test
+    @DisplayName("已红冲单据按终态排序，不能继续排在待处理区")
+    void reversedOrderShouldBeSortedAsTerminal() {
+        String customer = "红冲排序测试-" + System.nanoTime();
+        Long openOrderId = createOrder(10, customer);
+        Long shippedOrderId = shipOneOrder(100, 10, customer);
+        outboundOrderService.reverse(shippedOrderId);
+
+        OutboundOrderQuery query = new OutboundOrderQuery();
+        query.setPage(1);
+        query.setSize(20);
+        query.setKeyword(customer);
+        List<OutboundOrderVO> records = outboundOrderService.page(query).getRecords();
+
+        assertEquals(openOrderId, records.get(0).getId(),
+                "CREATED 单据必须排在 REVERSED 终态单据之前");
+    }
+
     private Long shipOneOrder(int stockQty, int orderQty) {
+        return shipOneOrder(stockQty, orderQty, "红冲测试客户");
+    }
+
+    private Long shipOneOrder(int stockQty, int orderQty, String customer) {
         stockIn(stockQty);
-        Long orderId = createOrder(orderQty);
+        Long orderId = createOrder(orderQty, customer);
         outboundOrderService.allocate(orderId);
         pickAll(orderId);
         outboundOrderService.ship(orderId);
@@ -189,9 +213,13 @@ class OutboundReverseTest {
     }
 
     private Long createOrder(int qty) {
+        return createOrder(qty, "红冲测试客户");
+    }
+
+    private Long createOrder(int qty, String customer) {
         OutboundOrderSaveDTO dto = new OutboundOrderSaveDTO();
         dto.setWarehouseId(WAREHOUSE_ID);
-        dto.setCustomerName("红冲测试客户");
+        dto.setCustomerName(customer);
         dto.setReceiveAddress("上海市测试路 1 号");
 
         OutboundItemDTO item = new OutboundItemDTO();

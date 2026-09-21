@@ -68,6 +68,15 @@ function unwrap(response) {
   throw new ApiError(body.message || '请求失败', body.code, body.traceId)
 }
 
+/**
+ * 网络错误时优先取「本次请求」带出去的 traceId。
+ * lastTraceId 是全局值，并发请求下可能已经被另一个请求覆盖；
+ * 用它兜底只适合拿不到请求配置的极端情况。
+ */
+function requestTraceId(error) {
+  return error?.config?.headers?.['X-Trace-Id'] || lastTraceId
+}
+
 function toApiError(error) {
   const body = error?.response?.data
   if (body && typeof body === 'object' && typeof body.code === 'number') {
@@ -75,14 +84,15 @@ function toApiError(error) {
     return new ApiError(body.message || '请求失败', body.code, body.traceId)
   }
 
+  const traceId = requestTraceId(error)
   const status = error?.response?.status
-  if (status === 401) return new ApiError('登录已过期，请重新登录', 20002, lastTraceId)
-  if (status === 403) return new ApiError('无权限访问该资源', 20003, lastTraceId)
-  if (status === 404) return new ApiError('请求的接口不存在', 10004, lastTraceId)
-  if (status >= 500) return new ApiError('服务暂时不可用，请稍后重试', 10001, lastTraceId)
-  if (error?.code === 'ECONNABORTED') return new ApiError('请求超时，请检查网络后重试', -2, lastTraceId)
-  if (!error?.response) return new ApiError('无法连接后端服务，请确认服务已启动', -1, lastTraceId)
-  return new ApiError(error.message || '请求失败', -3, lastTraceId)
+  if (status === 401) return new ApiError('登录已过期，请重新登录', 20002, traceId)
+  if (status === 403) return new ApiError('无权限访问该资源', 20003, traceId)
+  if (status === 404) return new ApiError('请求的接口不存在', 10004, traceId)
+  if (status >= 500) return new ApiError('服务暂时不可用，请稍后重试', 10001, traceId)
+  if (error?.code === 'ECONNABORTED') return new ApiError('请求超时，请检查网络后重试', -2, traceId)
+  if (!error?.response) return new ApiError('无法连接后端服务，请确认服务已启动', -1, traceId)
+  return new ApiError(error.message || '请求失败', -3, traceId)
 }
 
 /**

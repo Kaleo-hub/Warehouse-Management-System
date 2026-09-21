@@ -7,6 +7,7 @@ import { useWarehouseOptions } from '@/composables/useWarehouseOptions'
 import { useAppStore } from '@/stores/app'
 import { ZONE_TYPE_TAG } from '@/constants/options'
 import { toastError } from '@/utils/error'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 /**
  * 库存汇总：把逐条明细按维度合并。
@@ -15,7 +16,7 @@ import { toastError } from '@/utils/error'
  * 后者才是管理员每天要看的东西。
  */
 const app = useAppStore()
-const loading = ref(false)
+const { loading, begin, isLatest, finish } = useLatestRequest()
 const rows = ref([])
 const dimension = ref('WAREHOUSE')
 const warehouseId = ref(app.currentWarehouseId)
@@ -54,17 +55,20 @@ function fmt(v) { return Number(v || 0).toLocaleString('zh-CN') }
 function percent(v) { return Math.round(((Number(v) || 0) / maxQty.value) * 100) }
 
 async function load() {
-  loading.value = true
+  const token = begin()
   try {
-    rows.value = await inventoryApi.groupedSummary({
+    const data = await inventoryApi.groupedSummary({
       dimension: dimension.value,
       warehouseId: warehouseId.value || undefined,
     })
+    if (!isLatest(token)) return
+    rows.value = data
   } catch (error) {
+    if (!isLatest(token)) return
     toastError(error, '加载汇总失败')
     rows.value = []
   } finally {
-    loading.value = false
+    finish(token)
   }
 }
 
