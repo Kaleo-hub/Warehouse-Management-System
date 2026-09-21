@@ -29,4 +29,16 @@ public interface LocationService {
      * 提供给入库 / 出库模块在完成上架时调用 —— 跨模块只能调 Service，不能注入别人的 Mapper。
      */
     void increaseUsedCapacity(Long locationId, int qty);
+
+    /**
+     * 货物离开库位时减少已用容量（移库转出、盘亏用）。
+     *
+     * 和 increaseUsedCapacity 不一样：这个方法【不抛异常】。
+     * 因为已用容量只是给看板看的冗余计数，一旦它自己算错了，
+     * 不应该把「移库」这种正经业务操作一起卡死。
+     * 计数不够减时返回 false，调用方记一条 warn 日志即可。
+     *
+     * @return true 减成功；false 库位不存在或已用容量不够减（未做任何修改）
+     */
+    boolean decreaseUsedCapacity(Long locationId, int qty);
 }

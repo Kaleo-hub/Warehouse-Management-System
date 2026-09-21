@@ -8,6 +8,7 @@ import com.myproject.wmsserver.inventory.vo.InventoryAlertVO;
 import com.myproject.wmsserver.inventory.vo.InventoryGroupVO;
 import com.myproject.wmsserver.inventory.vo.InventorySummaryVO;
 import com.myproject.wmsserver.inventory.vo.InventoryVO;
+import com.myproject.wmsserver.inventory.vo.ReconcileVO;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
@@ -75,6 +76,12 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
     IPage<InventoryVO> selectInventoryPage(IPage<InventoryVO> page,
                                            @Param("query") InventoryQuery query);
 
+    /**
+     * 按 id 查一条库存（移库 / 盘点的深链入口用）。
+     * 和分页查询共用同一段列定义，保证返回字段完全一致。
+     */
+    InventoryVO selectInventoryById(@Param("id") Long id);
+
     /* ==================== 汇总 / 预警（看板用） ==================== */
 
     /** 库存侧聚合：总在库/锁定/冻结/可用 + SKU 数 + 有货库位数 */
@@ -104,4 +111,41 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
     List<InventoryAlertVO.FrozenAlert> selectFrozenAlerts(@Param("warehouseId") Long warehouseId);
 
     List<InventoryAlertVO.CapacityAlert> selectOverCapacityAlerts(@Param("warehouseId") Long warehouseId);
+
+    /* ==================== 对账（BR-009） ==================== */
+
+    /** 库存总行数，用于对账报告里的「扫描了多少条」 */
+    int countInventoryRows();
+
+    /**
+     * 扫出「余额和流水对不上」的库存行。
+     *
+     * 核心思路：流水是唯一真相，余额是缓存。把每个 (库位, SKU, 批次) 的流水 SUM 一遍，
+     * 和 inventory 当前值比，不一样的就是账不平 —— 一行 SQL 就能查出来，不用把全表拉进内存算。
+     *
+     * 只返回不一致的行（对得上的一行都不返回），所以数据量大的时候这个查询也很轻，
+     * 结果通常为空，这也是「对账任务可以随时跑」的前提。
+     */
+    List<ReconcileVO.Mismatch> selectReconcileMismatches();
+
+    /**
+     * 把余额改写成按流水重算出来的值（对账修正专用）。
+     *
+     * 【这是全项目唯一一处绕过 applyChange 直接写 inventory 的地方，必须解释清楚】
+     * applyChange 的语义是「发生了一次库存变动」：它会写一条流水，用来累加出新的余额。
+     * 而对账修正不是变动 —— 没有任何货进出仓库，它只是把「派生出来的余额」
+     * 重新算了一遍（类似重建缓存 / 索引）。如果硬要走 applyChange，
+     * 那个修正流水会改变流水 SUM，导致下一次对账又对不平，永远收敛不了。
+     *
+     * 所以这里直接改余额，并且带 version 做 CAS：
+     * 扫描的时候读到的 version 如果已经变了（说明这一行在扫描之后被正常业务改过），
+     * 影响行数就是 0，这次修正作废 —— 下一次对账再说，绝不覆盖别人的正常改动。
+     *
+     * @return 影响行数。0 表示 version 变了或行已被删除
+     */
+    int repairBalance(@Param("id") Long id,
+                      @Param("qty") int qty,
+                      @Param("lockedQty") int lockedQty,
+                      @Param("frozenQty") int frozenQty,
+                      @Param("version") int version);
 }

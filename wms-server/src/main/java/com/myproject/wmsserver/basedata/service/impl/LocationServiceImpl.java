@@ -132,6 +132,21 @@ public class LocationServiceImpl implements LocationService {
         }
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean decreaseUsedCapacity(Long locationId, int qty) {
+        if (qty <= 0) {
+            return true;
+        }
+        int affected = locationMapper.decreaseUsedCapacity(locationId, qty);
+        if (affected == 0) {
+            // 不抛异常：把库位计数问题暴露在日志里，但不阻断移库 / 盘点这两个正经业务
+            log.warn("库位已用容量不足，未做减少 locationId={} 本次释放={}", locationId, qty);
+            return false;
+        }
+        return true;
+    }
+
     /** 按 id 查，不存在抛 RESOURCE_NOT_FOUND */
     private Location requireExists(Long id) {
         Location location = locationMapper.selectById(id);

@@ -20,6 +20,12 @@ public enum InventoryTxType {
     STOCKTAKING_GAIN("盘盈"),
     STOCKTAKING_LOSS("盘亏");
 
+    // 【这里没有 RECONCILE_FIX，是刻意的】
+    // 对账修正的是「余额」这个派生值，不是一次库存变动 —— 没有货进出仓库。
+    // 如果给它也写一条流水，流水的 SUM 就变了，下一次对账会算出新的差异，
+    // 永远收敛不了（这条结论是用测试跑出来的，不是拍脑袋）。
+    // 修正的审计痕迹走应用日志 + 对账结果，需要更正式的话应该写 audit_log，而不是库存流水。
+
     private final String description;
 
     InventoryTxType(String description) {

@@ -87,11 +87,14 @@
     </select>
 
     <!--
-      库存分页。
+      库存 VO 的列和 join 抽出来共用（分页 / 按 id 查详情）。
+      抽出来的原因很实际：两处各写一遍，改了一处忘了另一处，
+      接口返回的字段就会不一致，前端拿到的对象形状飘忽不定。
+
       available_qty 是生成列，直接查出来即可 —— 应用层不要自己算，
       算就可能算错，而这正是 BR-002 最容易出错的地方。
     -->
-    <select id="selectInventoryPage" resultType="com.myproject.wmsserver.inventory.vo.InventoryVO">
+    <sql id="inventoryVoBase">
         SELECT i.id,
                i.warehouse_id,
                w.name AS warehouse_name,
@@ -112,6 +115,11 @@
                  LEFT JOIN warehouse w ON w.id = i.warehouse_id AND w.deleted = 0
                  LEFT JOIN location l ON l.id = i.location_id AND l.deleted = 0
                  LEFT JOIN product p ON p.id = i.sku_id
+    </sql>
+
+    <!-- 库存分页 -->
+    <select id="selectInventoryPage" resultType="com.myproject.wmsserver.inventory.vo.InventoryVO">
+        <include refid="inventoryVoBase"/>
         WHERE i.deleted = 0
         <if test="query.keyword != null and query.keyword != ''">
             AND (p.sku_code LIKE CONCAT('%', #{query.keyword}, '%')
@@ -131,6 +139,16 @@
             AND i.batch_no = #{query.batchNo}
         </if>
         ORDER BY i.id DESC
+    </select>
+
+    <!--
+      按 id 查一条库存（移库 / 盘点的深链入口用）。
+      带上仓库名 / 库位编码 / 商品名，前端不用再反查一轮。
+    -->
+    <select id="selectInventoryById" resultType="com.myproject.wmsserver.inventory.vo.InventoryVO">
+        <include refid="inventoryVoBase"/>
+        WHERE i.deleted = 0
+          AND i.id = #{id}
     </select>
 
     <!-- ==================== 汇总 / 预警（看板用） ==================== -->
@@ -341,4 +359,89 @@
         ORDER BY over_qty DESC
         LIMIT 200
     </select>
+
+    <!-- ========== 对账（BR-009） ========== -->
+
+    <select id="countInventoryRows" resultType="int">
+        SELECT COUNT(*)
+        FROM inventory
+        WHERE deleted = 0
+    </select>
+
+    <!--
+      对账查询：找出「余额和流水对不上」的库存行。
+
+      ========== 这条 SQL 是这个模块最该讲清楚的一条 ==========
+      inventory.qty 是余额（缓存），inventory_transaction 是流水（账本）。
+      子查询 t 把流水按 (库位, SKU, 批次) 分组 SUM，得到「按流水推出来的数量」；
+      再和 inventory 上的当前值比，不等的就是账不平。
+
+      三个细节：
+      1. COALESCE(t.calc_qty, 0) 不能省。LEFT JOIN 之后，一条流水都没有的库存行
+         （理论上不该存在，除非有人手工插了 inventory）算出来是 NULL，
+         而 NULL 参与任何比较结果都是 NULL，这行就会被静默漏掉。
+      2. 在库 / 锁定 / 冻结三个量一起比。只比 qty 的话，
+         「货没少但锁定数丢了」这种问题会查不出来。
+      3. 流水 SUM 用的是 qty_change 这种「变动量」，不是 qty_after。
+         因为 qty_after 是变动那一刻的快照，只有连续的流水之间才有意义；
+         累加变动量才是和当前余额可比的量。
+
+      【性能】这里对 inventory_transaction 全表分组。学习项目的数据量没问题；
+      生产上流水表会按时间分区，并且只在业务量低的时候跑。
+      好消息是：WHERE 只返回不一致的行，正常情况一条都不返回，所以这个查询可以随时跑。
+    -->
+    <select id="selectReconcileMismatches" resultType="com.myproject.wmsserver.inventory.vo.ReconcileVO$Mismatch">
+        SELECT i.id                       AS inventory_id,
+               i.warehouse_id             AS warehouse_id,
+               i.location_id              AS location_id,
+               l.code                     AS location_code,
+               i.sku_id                   AS sku_id,
+               p.sku_code                 AS sku_code,
+               p.name                     AS sku_name,
+               i.batch_no                 AS batch_no,
+               i.version                  AS version,
+               i.qty                      AS balance_qty,
+               COALESCE(t.calc_qty, 0)    AS calculated_qty,
+               i.locked_qty               AS balance_locked_qty,
+               COALESCE(t.calc_locked, 0) AS calculated_locked_qty,
+               i.frozen_qty               AS balance_frozen_qty,
+               COALESCE(t.calc_frozen, 0) AS calculated_frozen_qty
+        FROM inventory i
+                 LEFT JOIN (SELECT location_id,
+                                   sku_id,
+                                   batch_no,
+                                   SUM(qty_change)    AS calc_qty,
+                                   SUM(locked_change) AS calc_locked,
+                                   SUM(frozen_change) AS calc_frozen
+                            FROM inventory_transaction
+                            GROUP BY location_id, sku_id, batch_no) t
+                           ON t.location_id = i.location_id
+                               AND t.sku_id = i.sku_id
+                               AND t.batch_no = i.batch_no
+                 LEFT JOIN location l ON l.id = i.location_id
+                 LEFT JOIN product p ON p.id = i.sku_id
+        WHERE i.deleted = 0
+          AND (i.qty &lt;&gt; COALESCE(t.calc_qty, 0)
+            OR i.locked_qty &lt;&gt; COALESCE(t.calc_locked, 0)
+            OR i.frozen_qty &lt;&gt; COALESCE(t.calc_frozen, 0))
+        ORDER BY i.id ASC
+    </select>
+
+    <!--
+      对账修正：把余额改成按流水重算出来的值。
+
+      这是全项目唯一一处「不写流水就改 inventory」的 SQL，原因见 Mapper 接口上的注释：
+      这不是库存变动，是重建派生数据。带上 version 做 CAS，
+      扫描之后被别人改过的行直接放弃修正（影响行数 0），交给下一次对账。
+    -->
+    <update id="repairBalance">
+        UPDATE inventory
+        SET qty        = #{qty},
+            locked_qty = #{lockedQty},
+            frozen_qty = #{frozenQty},
+            version    = version + 1
+        WHERE id = #{id}
+          AND version = #{version}
+          AND deleted = 0
+    </update>
 </mapper>

@@ -1,6 +1,8 @@
 package com.myproject.wmsserver.inventory.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.myproject.wmsserver.common.exception.BizException;
+import com.myproject.wmsserver.common.exception.CommonErrorCode;
 import com.myproject.wmsserver.common.result.PageResult;
 import com.myproject.wmsserver.inventory.dto.InventoryQuery;
 import com.myproject.wmsserver.inventory.dto.SummaryQuery;
@@ -32,6 +34,15 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
         Page<InventoryVO> page = new Page<>(query.getPage(), query.getSize());
         inventoryMapper.selectInventoryPage(page, query);
         return PageResult.of(page, page.getRecords());
+    }
+
+    @Override
+    public InventoryVO getInventory(Long id) {
+        InventoryVO vo = inventoryMapper.selectInventoryById(id);
+        if (vo == null) {
+            throw new BizException(CommonErrorCode.RESOURCE_NOT_FOUND);
+        }
+        return vo;
     }
 
     @Override

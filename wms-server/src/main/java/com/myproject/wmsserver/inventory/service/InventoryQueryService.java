@@ -27,6 +27,9 @@ public interface InventoryQueryService {
     /** 库存分页：keyword 匹配 skuCode/skuName/locationCode */
     PageResult<InventoryVO> pageInventory(InventoryQuery query);
 
+    /** 按 id 查一条库存，不存在抛 10003。移库 / 盘点页面拿它做深链进来时的初值 */
+    InventoryVO getInventory(Long id);
+
     /** 流水分页：keyword 匹配 txNo/skuCode/skuName */
     PageResult<InventoryTransactionVO> pageTransaction(TransactionQuery query);
 

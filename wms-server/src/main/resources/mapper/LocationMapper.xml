@@ -16,4 +16,17 @@
           AND (capacity = 0 OR used_capacity + #{qty} &lt;= capacity)
     </update>
 
+    <!--
+      减少已用容量。used_capacity &gt;= #{qty} 是防负数兜底：
+      减少是「宽进严出」的 —— 减多了会让库位看起来更空，从而放更多货，
+      所以宁可这里不改（返回 0 让上层告警），也不要把计数写成负数。
+    -->
+    <update id="decreaseUsedCapacity">
+        UPDATE location
+        SET used_capacity = used_capacity - #{qty}
+        WHERE id = #{id}
+          AND deleted = 0
+          AND used_capacity &gt;= #{qty}
+    </update>
+
 </mapper>

@@ -18,4 +18,14 @@ public interface LocationMapper extends BaseMapper<Location> {
      * @return 影响行数。0 表示容量不足或库位不存在
      */
     int increaseUsedCapacity(@Param("id") Long id, @Param("qty") int qty);
+
+    /**
+     * 货物移出库位（移库转出 / 盘亏）时减少已用容量。
+     *
+     * 条件 used_capacity &gt;= qty 是防负数：已用容量是冗余计数，
+     * 万一被手工改过或其他模块漏减，这里宁可少减也不要把计数写成负数。
+     *
+     * @return 影响行数。0 表示库位不存在或已用容量不够减
+     */
+    int decreaseUsedCapacity(@Param("id") Long id, @Param("qty") int qty);
 }
