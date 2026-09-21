@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.myproject.wmsserver.basedata.service.LocationService;
 import com.myproject.wmsserver.basedata.service.ProductService;
+import com.myproject.wmsserver.basedata.service.WarehouseService;
 import com.myproject.wmsserver.basedata.vo.ProductVO;
 import com.myproject.wmsserver.common.context.UserContext;
 import com.myproject.wmsserver.common.exception.BizException;
@@ -68,6 +69,7 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
     /** 往来单位主数据。跨模块只调 Service，不碰别人的 Mapper */
     private final PartnerService partnerService;
     private final SequenceService sequenceService;
+    private final WarehouseService warehouseService;
     private final InventoryService inventoryService;
 
     /**
@@ -102,6 +104,7 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long create(OutboundOrderSaveDTO dto) {
+        requireEnabledWarehouse(dto.getWarehouseId());
         List<Long> skuIds = dto.getItems().stream().map(OutboundItemDTO::getSkuId).distinct().toList();
         Map<Long, ProductVO> skuMap = productService.mapByIds(skuIds);
 
@@ -345,6 +348,12 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
          */
         for (OutboundAllocate allocate : allocates) {
             int qty = nz(allocate.getAllocatedQty());
+            if (nz(allocate.getPickedQty()) != qty) {
+                log.warn("发货前拣货数量不一致 allocateId={} 分配={} 已拣={}",
+                        allocate.getId(), qty, allocate.getPickedQty());
+                throw new BizException(OutboundErrorCode.SHIP_QTY_MISMATCH);
+            }
+
             inventoryService.applyChange(InventoryChangeCommand.builder()
                     .warehouseId(allocate.getWarehouseId())
                     .locationId(allocate.getLocationId())
@@ -404,6 +413,16 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
             return;
         }
 
+        OutboundAllocate allocate = allocateMapper.selectById(allocateId);
+        if (allocate == null || !orderId.equals(allocate.getOrderId())) {
+            throw new BizException(OutboundErrorCode.ALLOCATE_STATUS_NOT_ALLOWED);
+        }
+        if (qty != nz(allocate.getAllocatedQty())) {
+            log.warn("拣货数量与分配数量不一致 allocateId={} 分配={} 实际={}",
+                    allocateId, allocate.getAllocatedQty(), qty);
+            throw new BizException(OutboundErrorCode.SHIP_QTY_MISMATCH);
+        }
+
         // ① 分配明细 LOCKED → PICKED（CAS，防止同一个分配被拣两次）
         int affected = allocateMapper.markPicked(allocateId, qty);
         if (affected == 0) {
@@ -411,7 +430,6 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
             throw new BizException(OutboundErrorCode.ALLOCATE_STATUS_NOT_ALLOWED);
         }
 
-        OutboundAllocate allocate = allocateMapper.selectById(allocateId);
 
         // ② 回写单据明细的已拣数量
         int itemAffected = itemMapper.increasePickedQty(allocate.getOrderItemId(), qty);
@@ -459,6 +477,20 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
         BeanUtils.copyProperties(item, vo);
         return vo;
     }
+
+    /** 建单必须引用存在且启用的仓库，不能只靠数据库里的裸 ID。 */
+    private void requireEnabledWarehouse(Long warehouseId) {
+        String status;
+        try {
+            status = warehouseService.get(warehouseId).getStatus();
+        } catch (BizException e) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID);
+        }
+        if (!"ENABLED".equals(status)) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID);
+        }
+    }
+
 
     private String blankToEmpty(String value) {
         return value == null ? "" : value.trim();

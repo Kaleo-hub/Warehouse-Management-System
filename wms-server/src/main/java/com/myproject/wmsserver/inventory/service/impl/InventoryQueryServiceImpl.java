@@ -65,7 +65,7 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
         // 拆开查比一条十几个标量子查询的大 SQL 好读，也多不了几次往返（看板就用一次）。
         InventorySummaryVO stock = inventoryMapper.selectInventoryAggregate(warehouseId);
         InventorySummaryVO capacity = inventoryMapper.selectLocationCapacityAggregate(warehouseId);
-        InventorySummaryVO pending = inventoryMapper.selectPendingCounts();
+        InventorySummaryVO pending = inventoryMapper.selectPendingCounts(warehouseId);
 
         InventorySummaryVO vo = new InventorySummaryVO();
         vo.setTotalQty(stock.getTotalQty());

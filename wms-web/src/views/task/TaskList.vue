@@ -110,6 +110,10 @@ async function submitComplete() {
   if (qty < 0) {
     ElMessage.warning('实际数量不能为负')
     return
+  if (isPick.value && qty !== Number(currentTask.value?.planQty ?? 0)) {
+    ElMessage.warning('拣货数量必须等于分配数量，数量异常请走差异处理')
+    return
+  }
   }
 
   completing.value = true
@@ -192,6 +196,7 @@ async function submitComplete() {
             v-model="completeForm.actualQty"
             :min="0"
             :max="currentTask?.planQty ?? 0"
+            :disabled="isPick"
             controls-position="right"
             style="width: 100%"
           />

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.myproject.wmsserver.basedata.service.LocationService;
 import com.myproject.wmsserver.common.context.UserContext;
+import com.myproject.wmsserver.common.exception.AuthErrorCode;
 import com.myproject.wmsserver.common.exception.BizException;
 import com.myproject.wmsserver.common.exception.CommonErrorCode;
 import com.myproject.wmsserver.common.exception.InboundErrorCode;
@@ -134,7 +135,10 @@ public class StockTaskServiceImpl implements StockTaskService {
             }
 
             Long toLocationId = taskMapper.selectRecommendedPutawayLocationId(
-                    order.getWarehouseId(), item.getSkuId());
+                    order.getWarehouseId(), item.getSkuId(), pending);
+            if (toLocationId == null) {
+                throw new BizException(CommonErrorCode.LOCATION_CAPACITY_NOT_ENOUGH);
+            }
 
             StockTask task = new StockTask();
             task.setTaskNo(sequenceService.nextNo(BIZ_TYPE, TASK_NO_PREFIX));
@@ -282,6 +286,11 @@ public class StockTaskServiceImpl implements StockTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void start(Long taskId) {
+        StockTask task = taskMapper.selectById(taskId);
+        if (task == null) {
+            throw new BizException(CommonErrorCode.RESOURCE_NOT_FOUND);
+        }
+        requireTaskAssignee(task);
         int affected = taskMapper.start(taskId);
         if (affected == 0) {
             throw new BizException(TaskErrorCode.TASK_STATUS_NOT_ALLOWED);
@@ -298,10 +307,20 @@ public class StockTaskServiceImpl implements StockTaskService {
         if (task == null) {
             throw new BizException(CommonErrorCode.RESOURCE_NOT_FOUND);
         }
+        requireTaskAssignee(task);
 
         int actualQty = nz(dto.getActualQty());
         if (actualQty > nz(task.getPlanQty())) {
             throw new BizException(CommonErrorCode.PARAM_INVALID);
+        }
+
+        boolean isPick = TaskType.PICK.name().equals(task.getTaskType());
+        if (!isPick && !TaskType.PUTAWAY.name().equals(task.getTaskType())) {
+            throw new BizException(TaskErrorCode.TASK_TYPE_NOT_SUPPORTED);
+        }
+        // 短拣不能把未实际拣出的货核销掉；差货应走异常处理，不能直接完成。
+        if (isPick && actualQty != nz(task.getPlanQty())) {
+            throw new BizException(TaskErrorCode.PICK_QTY_MISMATCH);
         }
 
         // ---------- ① 先 CAS 占状态：PROCESSING → DONE ----------
@@ -315,7 +334,7 @@ public class StockTaskServiceImpl implements StockTaskService {
         }
 
         // ---------- ② 按任务类型分流 ----------
-        if (TaskType.PICK.name().equals(task.getTaskType())) {
+        if (isPick) {
             completePick(task, actualQty);
         } else {
             completePutaway(task, actualQty);
@@ -393,6 +412,18 @@ public class StockTaskServiceImpl implements StockTaskService {
 
         log.info("拣货完成 taskNo={} 数量={} 源库位={}",
                 task.getTaskNo(), actualQty, task.getFromLocationId());
+    }
+
+    private void requireTaskAssignee(StockTask task) {
+        UserContext.CurrentUser user = UserContext.get();
+        if (user == null || user.getUserId() == null || task.getAssigneeId() == null) {
+            return;
+        }
+        if (!task.getAssigneeId().equals(user.getUserId())) {
+            log.warn("用户尝试操作他人任务 taskId={} assigneeId={} currentUserId={}",
+                    task.getId(), task.getAssigneeId(), user.getUserId());
+            throw new BizException(AuthErrorCode.FORBIDDEN);
+        }
     }
 
     private int nz(Integer value) {

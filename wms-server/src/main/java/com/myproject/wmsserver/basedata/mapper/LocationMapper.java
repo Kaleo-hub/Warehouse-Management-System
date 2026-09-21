@@ -3,6 +3,7 @@ package com.myproject.wmsserver.basedata.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.myproject.wmsserver.basedata.entity.Location;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 public interface LocationMapper extends BaseMapper<Location> {
 
@@ -28,4 +29,8 @@ public interface LocationMapper extends BaseMapper<Location> {
      * @return 影响行数。0 表示库位不存在或已用容量不够减
      */
     int decreaseUsedCapacity(@Param("id") Long id, @Param("qty") int qty);
+
+    /** 只读投影：库位当前库存总量，修改归属和删除前做校验。 */
+    @Select("SELECT COALESCE(SUM(qty), 0) FROM inventory WHERE location_id = #{locationId} AND deleted = 0")
+    int sumInventoryQtyByLocationId(@Param("locationId") Long locationId);
 }

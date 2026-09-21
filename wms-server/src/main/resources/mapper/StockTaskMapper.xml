@@ -78,17 +78,29 @@
     <select id="selectRecommendedPutawayLocationId" resultType="java.lang.Long">
         SELECT l.id
         FROM location l
-                 LEFT JOIN inventory i
-                           ON i.location_id = l.id
-                               AND i.sku_id = #{skuId}
-                               AND i.deleted = 0
-                               AND i.qty &gt; 0
         WHERE l.warehouse_id = #{warehouseId}
           AND l.deleted = 0
           AND l.status = 'ENABLED'
           AND l.location_type = 'RACK'
-        GROUP BY l.id, l.capacity, l.used_capacity
-        ORDER BY MAX(CASE WHEN i.id IS NOT NULL THEN 1 ELSE 0 END) DESC,
+          AND (
+              l.capacity = 0
+              OR l.used_capacity + #{qty} + COALESCE((
+                  SELECT SUM(t.plan_qty)
+                  FROM stock_task t
+                  WHERE t.to_location_id = l.id
+                    AND t.task_type = 'PUTAWAY'
+                    AND t.status NOT IN ('DONE', 'CANCELLED')
+                    AND t.deleted = 0
+              ), 0) &lt;= l.capacity
+          )
+        ORDER BY EXISTS(
+                     SELECT 1
+                     FROM inventory i
+                     WHERE i.location_id = l.id
+                       AND i.sku_id = #{skuId}
+                       AND i.deleted = 0
+                       AND i.qty &gt; 0
+                 ) DESC,
                  CASE WHEN l.capacity = 0 THEN 999999 ELSE l.used_capacity / l.capacity END ASC,
                  l.id ASC
         LIMIT 1

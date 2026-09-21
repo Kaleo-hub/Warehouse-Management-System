@@ -92,9 +92,20 @@ public class LocationServiceImpl implements LocationService {
 
     @Override
     public void update(Long id, LocationSaveDTO dto) {
-        requireExists(id);
+        Location existing = requireExists(id);
         checkWarehouseExists(dto.getWarehouseId());
         checkZoneBelongsToWarehouse(dto.getZoneId(), dto.getWarehouseId());
+
+        int usedCapacity = existing.getUsedCapacity() == null ? 0 : existing.getUsedCapacity();
+        int inventoryQty = locationMapper.sumInventoryQtyByLocationId(id);
+        if (!existing.getWarehouseId().equals(dto.getWarehouseId())
+                && (usedCapacity > 0 || inventoryQty > 0)) {
+            throw new BizException(CommonErrorCode.RELATED_DATA_EXISTS);
+        }
+        if (dto.getCapacity() > 0 && dto.getCapacity() < Math.max(usedCapacity, inventoryQty)) {
+            throw new BizException(CommonErrorCode.LOCATION_CAPACITY_NOT_ENOUGH);
+        }
+
         checkCodeUnique(dto.getWarehouseId(), dto.getCode(), id);
 
         Location location = new Location();
@@ -112,6 +123,9 @@ public class LocationServiceImpl implements LocationService {
         // 更细的库存占用校验规则等库存模块实现后按约定补充。
         if (location.getUsedCapacity() != null && location.getUsedCapacity() > 0) {
             log.warn("库位有库存，拒绝删除 locationId={} usedCapacity={}", id, location.getUsedCapacity());
+            throw new BizException(CommonErrorCode.RELATED_DATA_EXISTS);
+        }
+        if (locationMapper.sumInventoryQtyByLocationId(id) > 0) {
             throw new BizException(CommonErrorCode.RELATED_DATA_EXISTS);
         }
         // 全局 logic-delete 配置生效，deleteById 自动转成 update deleted=1

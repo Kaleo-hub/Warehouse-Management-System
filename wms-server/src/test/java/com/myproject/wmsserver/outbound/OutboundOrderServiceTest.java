@@ -2,6 +2,7 @@ package com.myproject.wmsserver.outbound;
 
 import com.myproject.wmsserver.common.exception.BizException;
 import com.myproject.wmsserver.common.exception.OutboundErrorCode;
+import com.myproject.wmsserver.common.exception.TaskErrorCode;
 import com.myproject.wmsserver.inventory.dto.InventoryChangeCommand;
 import com.myproject.wmsserver.inventory.enums.InventoryTxType;
 import com.myproject.wmsserver.inventory.service.InventoryService;
@@ -353,6 +354,32 @@ class OutboundOrderServiceTest {
                 "发货把 40 件真的搬出去了，库位占用必须减 40 —— "
                         + "只减库存不减占用的话，看板的库位占用率会一路虚高，"
                         + "最后空库位也会报「容量不足」");
+    }
+
+    @Test
+    @DisplayName("★ 短拣必须被拒绝：未实际拣出的数量不能进入发货核销")
+    void shortPickShouldBeRejected() {
+        stockIn(LOCATION_A, BATCH_A, 100);
+        Long orderId = createOrder(40);
+        outboundOrderService.allocate(orderId);
+        stockTaskService.generatePickTasks(orderId);
+
+        StockTaskQuery query = new StockTaskQuery();
+        query.setSourceNo(outboundOrderService.get(orderId).getOrderNo());
+        query.setTaskType("PICK");
+        StockTaskVO task = stockTaskService.page(query).getRecords().get(0);
+        stockTaskService.assign(task.getId());
+        stockTaskService.start(task.getId());
+
+        StockTaskCompleteDTO dto = new StockTaskCompleteDTO();
+        dto.setActualQty(task.getPlanQty() - 1);
+        BizException ex = assertThrows(BizException.class,
+                () -> stockTaskService.complete(task.getId(), dto));
+
+        assertEquals(TaskErrorCode.PICK_QTY_MISMATCH.getCode(), ex.getErrorCode().getCode());
+        assertEquals(OutboundStatus.PICKING.name(), outboundOrderService.get(orderId).getStatus(),
+                "短拣后单据必须停在 PICKING，不能推进到 PICKED");
+        assertEquals(40, inventoryOf(LOCATION_A, BATCH_A)[1], "锁定库存不能被错误核销");
     }
 
     @Test

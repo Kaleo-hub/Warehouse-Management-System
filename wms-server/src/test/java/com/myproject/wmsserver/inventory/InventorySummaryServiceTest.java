@@ -41,6 +41,7 @@ class InventorySummaryServiceTest {
     private static final String LOC_CODE = "T-L-01";
     private static final String SKU_CODE = "TEST-SUMMARY-SKU";
     private static final String BATCH_NO = "T-BATCH-001";
+    private static final String PENDING_ORDER_NO = "T-SUMMARY-PENDING";
     private static final int CAPACITY = 1000;
 
     @Autowired private InventoryService inventoryService;
@@ -56,6 +57,7 @@ class InventorySummaryServiceTest {
     void setUp() {
         // 先清掉可能残留的同名数据（逻辑删除不影响唯一键，所以只能物理删）
         jdbcTemplate.update("DELETE FROM inventory WHERE batch_no = ?", BATCH_NO);
+        jdbcTemplate.update("DELETE FROM inbound_order WHERE order_no = ?", PENDING_ORDER_NO);
         jdbcTemplate.update("DELETE FROM location WHERE code = ?", LOC_CODE);
         jdbcTemplate.update("DELETE FROM warehouse WHERE code = ?", WH_CODE);
         jdbcTemplate.update("DELETE FROM product WHERE sku_code = ?", SKU_CODE);
@@ -81,6 +83,7 @@ class InventorySummaryServiceTest {
     @AfterEach
     void tearDown() {
         jdbcTemplate.update("DELETE FROM inventory_transaction WHERE batch_no = ?", BATCH_NO);
+        jdbcTemplate.update("DELETE FROM inbound_order WHERE order_no = ?", PENDING_ORDER_NO);
         jdbcTemplate.update("DELETE FROM inventory WHERE batch_no = ?", BATCH_NO);
         jdbcTemplate.update("DELETE FROM location WHERE code = ?", LOC_CODE);
         jdbcTemplate.update("DELETE FROM warehouse WHERE code = ?", WH_CODE);

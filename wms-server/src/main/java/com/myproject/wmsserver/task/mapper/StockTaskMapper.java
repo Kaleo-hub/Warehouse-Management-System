@@ -46,7 +46,8 @@ public interface StockTaskMapper extends BaseMapper<StockTask> {
      * 再抽成独立的 PutawayStrategy 组件。
      */
     Long selectRecommendedPutawayLocationId(@Param("warehouseId") Long warehouseId,
-                                            @Param("skuId") Long skuId);
+                                            @Param("skuId") Long skuId,
+                                            @Param("qty") int qty);
 
     /**
      * ① 超时打标：过了 deadline 还没做完的任务 → TIMEOUT。

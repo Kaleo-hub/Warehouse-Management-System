@@ -28,6 +28,7 @@
             expiry_date     = COALESCE(#{expiryDate}, expiry_date)
         WHERE id = #{id}
           AND deleted = 0
+          AND received_qty + #{receivedQty} &lt;= expect_qty
     </update>
 
     <update id="increasePutawayQty">

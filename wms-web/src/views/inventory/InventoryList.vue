@@ -103,7 +103,7 @@ async function submitFreeze() {
 
 /** 带上 inventoryId 进移库页，源库存直接锁定，不用让用户再选一遍 */
 function goTransfer(row) {
-  router.push({ path: '/inventory/transfer', query: { inventoryId: row.id } })
+  router.push({ path: '/inventory/transfer/quick', query: { inventoryId: row.id } })
 }
 
 /* ---------------- 导出 ---------------- */
@@ -130,7 +130,7 @@ async function handleExport(params) {
 }
 
 function goStocktake(row) {
-  router.push({ path: '/inventory/stocktaking', query: { inventoryId: row.id } })
+  router.push({ path: '/inventory/stocktaking/quick', query: { inventoryId: row.id } })
 }
 </script>
 

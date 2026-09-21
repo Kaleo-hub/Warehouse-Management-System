@@ -19,8 +19,11 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -39,6 +42,8 @@ class IdempotentAndAuditTest {
     private static final String SKU_CODE = "TEST-IDEM-SKU";
     private static final String SUPPLIER = "幂等测试供应商";
     private static final String AUDIT_USER = "audit_probe";
+    private static final String AUTH_FRESH_USER = "auth_fresh_user";
+    private static final String AUTH_FRESH_WH = "T-AUTH-FRESH-WH";
 
     @Autowired
     private MockMvc mockMvc;
@@ -61,12 +66,7 @@ class IdempotentAndAuditTest {
         testSkuId = jdbcTemplate.queryForObject(
                 "SELECT id FROM product WHERE sku_code = ?", Long.class, SKU_CODE);
 
-        MvcResult login = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"admin\",\"password\":\"123456\"}"))
-                .andExpect(status().isOk())
-                .andReturn();
-        token = com.jayway.jsonpath.JsonPath.read(login.getResponse().getContentAsString(), "$.data.token");
+        token = login("admin", "123456");
     }
 
     @AfterEach
@@ -80,6 +80,8 @@ class IdempotentAndAuditTest {
         jdbcTemplate.update("DELETE FROM inbound_order_item WHERE order_id IN "
                 + "(SELECT id FROM inbound_order WHERE supplier_name = ?)", SUPPLIER);
         jdbcTemplate.update("DELETE FROM inbound_order WHERE supplier_name = ?", SUPPLIER);
+        jdbcTemplate.update("DELETE FROM warehouse WHERE code = ?", AUTH_FRESH_WH);
+        jdbcTemplate.update("DELETE FROM sys_user WHERE username = ?", AUTH_FRESH_USER);
         jdbcTemplate.update("DELETE FROM sys_user WHERE username = ?", AUDIT_USER);
         jdbcTemplate.update("DELETE FROM product WHERE sku_code = ?", SKU_CODE);
         createdOrderId = null;
@@ -92,10 +94,23 @@ class IdempotentAndAuditTest {
                 + testSkuId + ",\"expectQty\":" + expectQty + "}]}";
     }
 
+    private String login(String username, String password) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return com.jayway.jsonpath.JsonPath.read(result.getResponse().getContentAsString(), "$.data.token");
+    }
+
     /** 用指定的幂等 key 建单，返回响应体 */
     private String createOrder(String idempotentKey, int expectQty) throws Exception {
+        return createOrderWithToken(token, idempotentKey, expectQty);
+    }
+
+    private String createOrderWithToken(String authToken, String idempotentKey, int expectQty) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/inbound/inbound-orders")
-                        .header("Authorization", "Bearer " + token)
+                        .header("Authorization", "Bearer " + authToken)
                         .header("X-Idempotent-Key", idempotentKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody(expectQty)))
@@ -173,6 +188,66 @@ class IdempotentAndAuditTest {
     }
 
     /* ---------------------------- 用例 ---------------------------- */
+
+    @Test
+    @DisplayName("不存在的接口返回 404，参数类型错误返回 400，不能落到 500")
+    void commonHttpErrorsShouldUseBusinessCodes() throws Exception {
+        mockMvc.perform(get("/api/v1/not-exists")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(10004));
+
+        mockMvc.perform(get("/api/v1/inbound/inbound-orders/not-a-number")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(10002));
+    }
+
+    @Test
+    @DisplayName("★ 权限实时生效：令牌签发后被降权，旧 token 不能再调用原角色接口")
+    void roleChangeShouldTakeEffectImmediately() throws Exception {
+        MvcResult created = mockMvc.perform(post("/api/v1/system/users")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + AUTH_FRESH_USER + "\",\"realName\":\"权限探针\","
+                                + "\"role\":\"MANAGER\",\"password\":\"fresh123\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andReturn();
+        Object userId = com.jayway.jsonpath.JsonPath.read(
+                created.getResponse().getContentAsString(), "$.data");
+
+        String freshToken = login(AUTH_FRESH_USER, "fresh123");
+        mockMvc.perform(put("/api/v1/system/users/" + userId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + AUTH_FRESH_USER + "\",\"realName\":\"权限探针\","
+                                + "\"role\":\"OPERATOR\",\"status\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        mockMvc.perform(post("/api/v1/basedata/warehouses")
+                        .header("Authorization", "Bearer " + freshToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + AUTH_FRESH_WH + "\",\"name\":\"权限探针仓\","
+                                + "\"status\":\"ENABLED\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(20003));
+    }
+
+    @Test
+    @DisplayName("★ 幂等键按用户隔离：不同用户使用同一个客户端 key 不能互相重放响应")
+    void idempotencyShouldBeScopedByUser() throws Exception {
+        String key = UUID.randomUUID().toString();
+        String adminBody = createOrderWithToken(token, key, 10);
+        String operatorToken = login("op001", "op001pass");
+        String operatorBody = createOrderWithToken(operatorToken, key, 10);
+
+        Object adminId = com.jayway.jsonpath.JsonPath.read(adminBody, "$.data");
+        Object operatorId = com.jayway.jsonpath.JsonPath.read(operatorBody, "$.data");
+        assertNotEquals(((Number) adminId).longValue(), ((Number) operatorId).longValue(), "不同用户必须各自创建一张单");
+        assertEquals(2, orderCount(), "同一请求体和 key 在不同用户下应产生两条独立业务记录");
+    }
 
     @Test
     @DisplayName("★ 同一个幂等键连续提交三次：只建一张单，后两次拿到的是同一份响应")

@@ -1,6 +1,7 @@
 package com.myproject.wmsserver.inbound;
 
 import com.myproject.wmsserver.common.exception.BizException;
+import com.myproject.wmsserver.common.exception.CommonErrorCode;
 import com.myproject.wmsserver.common.exception.InboundErrorCode;
 import com.myproject.wmsserver.inbound.dto.InboundItemDTO;
 import com.myproject.wmsserver.inbound.dto.InboundOrderSaveDTO;
@@ -215,6 +216,39 @@ class InboundOrderServiceTest {
         BizException ex = assertThrows(BizException.class,
                 () -> inboundOrderService.receive(id, buildReceive(order.getItems().get(0).getId(), 1)));
         assertEquals(InboundErrorCode.STATUS_NOT_ALLOWED.getCode(), ex.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("同一请求里重复出现同一条入库明细：直接拒绝，不能把数量累加两次")
+    void duplicateItemInOneReceiveShouldBeRejected() {
+        Long id = inboundOrderService.create(buildOrder(100, 50));
+        Long itemId = inboundOrderService.get(id).getItems().get(0).getId();
+
+        ReceiveItemDTO first = new ReceiveItemDTO();
+        first.setItemId(itemId);
+        first.setReceivedQty(60);
+        first.setBatchNo("B-DUP-1");
+        ReceiveItemDTO second = new ReceiveItemDTO();
+        second.setItemId(itemId);
+        second.setReceivedQty(60);
+        second.setBatchNo("B-DUP-1");
+
+        InboundReceiveDTO dto = new InboundReceiveDTO();
+        dto.setItems(List.of(first, second));
+
+        BizException ex = assertThrows(BizException.class, () -> inboundOrderService.receive(id, dto));
+        assertEquals(CommonErrorCode.PARAM_INVALID.getCode(), ex.getErrorCode().getCode());
+        assertEquals(0, inboundOrderService.get(id).getItems().get(0).getReceivedQty());
+    }
+
+    @Test
+    @DisplayName("建单仓库不存在：拒绝创建，避免产生没有归属的裸单据")
+    void rejectUnknownWarehouse() {
+        InboundOrderSaveDTO dto = buildOrder(10, 10);
+        dto.setWarehouseId(99999999L);
+
+        BizException ex = assertThrows(BizException.class, () -> inboundOrderService.create(dto));
+        assertEquals(CommonErrorCode.PARAM_INVALID.getCode(), ex.getErrorCode().getCode());
     }
 
     /* ---------------------------- 取消 ---------------------------- */

@@ -32,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 
@@ -88,13 +89,19 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         order.setUpdateBy(UserContext.getUserId());
         orderMapper.insert(order);
 
+        Map<Long, ProductVO> productMap = productService.mapByIds(dto.getItems().stream()
+                .map(TransferOrderItemDTO::getSkuId).distinct().toList());
+
         Set<String> keys = new HashSet<>();
         for (TransferOrderItemDTO line : dto.getItems()) {
             String batchNo = normalizeBatchNo(line.getBatchNo());
             if (!keys.add(line.getSkuId() + "::" + batchNo)) {
                 throw new BizException(CommonErrorCode.PARAM_INVALID);
             }
-            ProductVO product = productService.get(line.getSkuId());
+            ProductVO product = productMap.get(line.getSkuId());
+            if (product == null || !"ENABLED".equals(product.getStatus())) {
+                throw new BizException(CommonErrorCode.PARAM_INVALID);
+            }
             Inventory source = inventoryMapper.selectByBusinessKey(
                     from.getId(), line.getSkuId(), batchNo);
             if (source == null) {

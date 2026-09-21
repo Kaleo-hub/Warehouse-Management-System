@@ -94,6 +94,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public void delete(Long id) {
+        if (productMapper.countInventoryBySkuId(id) > 0) {
+            throw new BizException(CommonErrorCode.RELATED_DATA_EXISTS);
+        }
         requireExists(id);
         // 全局 logic-delete 配置生效，deleteById 自动转成 update deleted=1
         productMapper.deleteById(id);

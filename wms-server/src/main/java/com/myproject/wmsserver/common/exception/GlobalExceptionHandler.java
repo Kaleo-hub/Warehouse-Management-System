@@ -8,6 +8,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -54,6 +56,20 @@ public class GlobalExceptionHandler {
         Result<Map<String, String>> result = Result.fail(CommonErrorCode.PARAM_INVALID);
         result.setData(errors);
         return ResponseEntity.badRequest().body(result);
+    }
+
+    /** 路径变量 / 查询参数类型错误，例如 /orders/abc，应该按参数错误返回而不是 500。 */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Result<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        log.warn("参数类型错误 name={} value={}", e.getName(), e.getValue());
+        return ResponseEntity.badRequest().body(Result.fail(CommonErrorCode.PARAM_INVALID));
+    }
+
+    /** 不存在的接口 / 静态资源返回 404，别落到系统异常 500。 */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Result<Void>> handleNoResource(NoResourceFoundException e) {
+        return ResponseEntity.status(CommonErrorCode.RESOURCE_NOT_FOUND.getHttpStatus())
+                .body(Result.fail(CommonErrorCode.RESOURCE_NOT_FOUND));
     }
 
     /** 请求体格式错误（JSON 解析失败） */

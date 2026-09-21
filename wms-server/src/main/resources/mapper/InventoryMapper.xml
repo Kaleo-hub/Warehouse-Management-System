@@ -198,11 +198,23 @@
     -->
     <select id="selectPendingCounts" resultType="com.myproject.wmsserver.inventory.vo.InventorySummaryVO">
         SELECT (SELECT COUNT(*) FROM stock_task
-                 WHERE deleted = 0 AND status NOT IN ('DONE', 'CANCELLED'))            AS pending_task_count,
+                 WHERE deleted = 0 AND status NOT IN ('DONE', 'CANCELLED')
+        <if test="warehouseId != null">
+                   AND warehouse_id = #{warehouseId}
+        </if>
+               )                                                                      AS pending_task_count,
                (SELECT COUNT(*) FROM inbound_order
-                 WHERE deleted = 0 AND status IN ('CREATED', 'RECEIVING'))             AS pending_inbound_count,
+                 WHERE deleted = 0 AND status IN ('CREATED', 'RECEIVING')
+        <if test="warehouseId != null">
+                   AND warehouse_id = #{warehouseId}
+        </if>
+               )                                                                      AS pending_inbound_count,
                (SELECT COUNT(*) FROM outbound_order
-                 WHERE deleted = 0 AND status IN ('CREATED', 'ALLOCATED', 'PICKING'))  AS pending_outbound_count
+                 WHERE deleted = 0 AND status IN ('CREATED', 'ALLOCATED', 'PICKING')
+        <if test="warehouseId != null">
+                   AND warehouse_id = #{warehouseId}
+        </if>
+               )                                                                      AS pending_outbound_count
     </select>
 
     <!-- ========== 三个维度的汇总 ========== -->

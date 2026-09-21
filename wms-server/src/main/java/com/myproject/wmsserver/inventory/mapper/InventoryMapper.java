@@ -98,7 +98,7 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
      * 带标量子查询的 SELECT，属于「读投影」而不是「写别人的表」。
      * 这样看板一次请求就够，不用调三个 Service 各查一遍。
      */
-    InventorySummaryVO selectPendingCounts();
+    InventorySummaryVO selectPendingCounts(@Param("warehouseId") Long warehouseId);
 
     List<InventoryGroupVO> selectGroupByWarehouse(@Param("warehouseId") Long warehouseId);
 

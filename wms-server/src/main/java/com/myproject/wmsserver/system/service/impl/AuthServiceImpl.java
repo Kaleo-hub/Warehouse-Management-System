@@ -10,6 +10,7 @@ import com.myproject.wmsserver.system.entity.SysUser;
 import com.myproject.wmsserver.system.mapper.SysUserMapper;
 import com.myproject.wmsserver.system.service.AuthService;
 import com.myproject.wmsserver.system.vo.LoginVO;
+import com.myproject.wmsserver.system.vo.SysUserVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,7 +40,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BizException(AuthErrorCode.ACCOUNT_DISABLED);
         }
 
-        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole());
+        String token = jwtUtil.generateToken(user.getId());
         log.info("登录成功 userId={} username={}", user.getId(), user.getUsername());
 
         return LoginVO.builder()
@@ -65,6 +66,28 @@ public class AuthServiceImpl implements AuthService {
         return LoginVO.builder()
                 .userInfo(buildUserInfo(user))
                 .build();
+    }
+
+    @Override
+    public SysUserVO loadAuthenticatedUser(Long userId) {
+        SysUser user = userId == null ? null : sysUserMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException(AuthErrorCode.UNAUTHORIZED);
+        }
+        if (user.getStatus() == null || user.getStatus() != 1) {
+            throw new BizException(AuthErrorCode.ACCOUNT_DISABLED);
+        }
+        return toVO(user);
+    }
+
+    private SysUserVO toVO(SysUser user) {
+        SysUserVO vo = new SysUserVO();
+        vo.setId(user.getId());
+        vo.setUsername(user.getUsername());
+        vo.setRealName(user.getRealName());
+        vo.setRole(user.getRole());
+        vo.setStatus(user.getStatus());
+        return vo;
     }
 
     private LoginVO.UserInfoVO buildUserInfo(SysUser user) {

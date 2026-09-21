@@ -1,6 +1,8 @@
 package com.myproject.wmsserver.task;
 
+import com.myproject.wmsserver.common.context.UserContext;
 import com.myproject.wmsserver.common.exception.BizException;
+import com.myproject.wmsserver.common.exception.AuthErrorCode;
 import com.myproject.wmsserver.common.exception.CommonErrorCode;
 import com.myproject.wmsserver.common.exception.InboundErrorCode;
 import com.myproject.wmsserver.common.exception.TaskErrorCode;
@@ -283,4 +285,36 @@ class StockTaskServiceTest {
         assertEquals(TaskStatus.DONE.name(), stockTaskService.get(task.getId()).getStatus());
         assertEquals(90, stockTaskService.get(task.getId()).getActualQty());
     }
+    @Test
+    @DisplayName("任务只能由领取人开始/完成，其他作业员不能越权操作")
+    void onlyAssigneeCanOperateTask() {
+        InboundOrderVO order = prepareReceivedOrder(10);
+        stockTaskService.generatePutawayTasks(order.getId());
+        StockTaskVO task = firstTaskOf(order.getOrderNo());
+
+        try {
+            UserContext.set(new UserContext.CurrentUser(101L, "operator-a", "OPERATOR"));
+            stockTaskService.assign(task.getId());
+            UserContext.clear();
+
+            UserContext.set(new UserContext.CurrentUser(102L, "operator-b", "OPERATOR"));
+            BizException ex = assertThrows(BizException.class, () -> stockTaskService.start(task.getId()));
+            assertEquals(AuthErrorCode.FORBIDDEN.getCode(), ex.getErrorCode().getCode());
+        } finally {
+            UserContext.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("没有满足容量和待处理占用的上架库位时，生成任务直接报容量不足")
+    void generatePutawayTasksShouldRejectWhenNoCapacity() {
+        InboundOrderVO order = prepareReceivedOrder(100);
+        jdbcTemplate.update("UPDATE location SET used_capacity = capacity "
+                + "WHERE warehouse_id = ? AND location_type = 'RACK' AND capacity > 0", WAREHOUSE_ID);
+
+        BizException ex = assertThrows(BizException.class,
+                () -> stockTaskService.generatePutawayTasks(order.getId()));
+        assertEquals(CommonErrorCode.LOCATION_CAPACITY_NOT_ENOUGH.getCode(), ex.getErrorCode().getCode());
+    }
+
 }

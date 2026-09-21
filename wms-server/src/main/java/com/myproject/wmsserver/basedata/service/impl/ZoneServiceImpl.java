@@ -83,8 +83,12 @@ public class ZoneServiceImpl implements ZoneService {
 
     @Override
     public void update(Long id, ZoneSaveDTO dto) {
-        requireExists(id);
+        Zone existing = requireExists(id);
         checkWarehouseExists(dto.getWarehouseId());
+        if (!existing.getWarehouseId().equals(dto.getWarehouseId())
+                && locationMapper.exists(Wrappers.<Location>lambdaQuery().eq(Location::getZoneId, id))) {
+            throw new BizException(CommonErrorCode.RELATED_DATA_EXISTS);
+        }
         checkCodeUnique(dto.getWarehouseId(), dto.getCode(), id);
 
         Zone zone = new Zone();

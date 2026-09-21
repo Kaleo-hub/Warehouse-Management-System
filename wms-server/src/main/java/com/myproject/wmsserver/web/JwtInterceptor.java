@@ -4,6 +4,8 @@ import com.myproject.wmsserver.common.context.UserContext;
 import com.myproject.wmsserver.common.exception.AuthErrorCode;
 import com.myproject.wmsserver.common.exception.BizException;
 import com.myproject.wmsserver.common.util.JwtUtil;
+import com.myproject.wmsserver.system.service.AuthService;
+import com.myproject.wmsserver.system.vo.SysUserVO;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -26,6 +28,7 @@ public class JwtInterceptor implements HandlerInterceptor {
     private static final String PREFIX = "Bearer ";
 
     private final JwtUtil jwtUtil;
+    private final AuthService authService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -43,8 +46,9 @@ public class JwtInterceptor implements HandlerInterceptor {
         Claims claims = jwtUtil.parseToken(token);
 
         Long userId = jwtUtil.getUserId(claims);
-        String username = jwtUtil.getUsername(claims);
-        String role = jwtUtil.getRole(claims);
+        SysUserVO currentUser = authService.loadAuthenticatedUser(userId);
+        String username = currentUser.getUsername();
+        String role = currentUser.getRole();
 
         UserContext.set(new UserContext.CurrentUser(userId, username, role));
 

@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
 import { getToken } from '@/utils/storage'
 import { emitSessionExpired } from '@/utils/session'
 import { createTraceId } from '@/utils/format'
@@ -19,7 +18,6 @@ export class ApiError extends Error {
 export const SESSION_EXPIRED_CODES = [20001, 20002]
 
 let lastTraceId = ''
-let redirecting = false
 
 /** 最近一次请求的 traceId，登录页会用它在报错时给出可排查的编号 */
 export function getLastTraceId() {

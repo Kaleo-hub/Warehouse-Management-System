@@ -20,8 +20,6 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    private static final String CLAIM_USERNAME = "username";
-    private static final String CLAIM_ROLE = "role";
 
     @Value("${wms.jwt.secret}")
     private String secret;
@@ -43,14 +41,12 @@ public class JwtUtil {
         log.info("JwtUtil 初始化完成，token 有效期 {} 分钟", expireMinutes);
     }
 
-    /** 生成 token：把 userId 放 subject，username / role 放自定义 claim */
-    public String generateToken(Long userId, String username, String role) {
+    /** 生成 token：只放 userId，用户名和角色每次请求从数据库读取最新值。 */
+    public String generateToken(Long userId) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + expireMinutes * 60 * 1000);
         return Jwts.builder()
                 .subject(String.valueOf(userId))
-                .claim(CLAIM_USERNAME, username)
-                .claim(CLAIM_ROLE, role)
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(key)
@@ -76,13 +72,4 @@ public class JwtUtil {
     public Long getUserId(Claims claims) {
         return Long.valueOf(claims.getSubject());
     }
-
-    public String getUsername(Claims claims) {
-        return claims.get(CLAIM_USERNAME, String.class);
-    }
-
-    public String getRole(Claims claims) {
-        return claims.get(CLAIM_ROLE, String.class);
-    }
-
 }

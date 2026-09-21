@@ -3,6 +3,7 @@ package com.myproject.wmsserver.common.idempotent;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.myproject.wmsserver.common.exception.BizException;
+import com.myproject.wmsserver.common.context.UserContext;
 import com.myproject.wmsserver.common.exception.CommonErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -70,10 +71,11 @@ public class IdempotentAspect {
 
     @Around("@annotation(idempotent)")
     public Object around(ProceedingJoinPoint pjp, Idempotent idempotent) throws Throwable {
-        String key = buildKey(pjp, idempotent);
+        String requestHash = hashArgs(pjp);
+        String key = buildKey(pjp, idempotent, requestHash);
 
         AcquireResult result = idempotentService.tryAcquire(
-                key, idempotent.bizType(), hashArgs(pjp), idempotent.ttlMinutes());
+                key, idempotent.bizType(), requestHash, idempotent.ttlMinutes());
 
         switch (result.status()) {
             case REPLAY -> {
@@ -88,7 +90,12 @@ public class IdempotentAspect {
 
         try {
             Object returnValue = pjp.proceed();
-            idempotentService.markSuccess(key, returnValue);
+            try {
+                idempotentService.markSuccess(key, returnValue);
+            } catch (Exception markError) {
+                // 业务已经提交成功，幂等登记失败不能反过来把成功请求变成失败。
+                log.error("幂等成功记录写入失败 key={}", key, markError);
+            }
             return returnValue;
         } catch (Throwable e) {
             /*
@@ -97,7 +104,11 @@ public class IdempotentAspect {
              *   2. 排查时能看到「上次失败在哪」
              * 注意这里【不能吞异常】，业务为什么失败要原样抛给调用方和全局异常处理器。
              */
-            idempotentService.markFailed(key, e.getMessage());
+            try {
+                idempotentService.markFailed(key, e.getMessage());
+            } catch (Exception markError) {
+                log.error("幂等失败记录写入失败 key={}", key, markError);
+            }
             throw e;
         }
     }
@@ -115,9 +126,10 @@ public class IdempotentAspect {
      * 比如分批收货——收 30 件、再收 30 件，必须都能执行。
      * 只有「内容完全相同」的重复提交才是要挡的，哈希正好表达这件事。
      */
-    private String buildKey(ProceedingJoinPoint pjp, Idempotent idempotent) {
+    private String buildKey(ProceedingJoinPoint pjp, Idempotent idempotent, String requestHash) {
         String identity = resolveIdentity(pjp, idempotent);
-        return idempotent.bizType() + ":" + identity + ":" + hashArgs(pjp);
+        String userScope = UserContext.getUserId() == null ? "anonymous" : "u" + UserContext.getUserId();
+        return idempotent.bizType() + ":" + userScope + ":" + identity + ":" + requestHash;
     }
 
     private String resolveIdentity(ProceedingJoinPoint pjp, Idempotent idempotent) {

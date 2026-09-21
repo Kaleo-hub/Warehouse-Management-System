@@ -2,6 +2,7 @@ package com.myproject.wmsserver.inbound.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.myproject.wmsserver.basedata.service.ProductService;
+import com.myproject.wmsserver.basedata.service.WarehouseService;
 import com.myproject.wmsserver.basedata.vo.ProductVO;
 import com.myproject.wmsserver.common.context.UserContext;
 import com.myproject.wmsserver.common.exception.BizException;
@@ -30,7 +31,9 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -58,6 +61,7 @@ public class InboundOrderServiceImpl implements InboundOrderService {
     /** 往来单位主数据。跨模块只调 Service，不碰别人的 Mapper */
     private final PartnerService partnerService;
     private final SequenceService sequenceService;
+    private final WarehouseService warehouseService;
 
     /* ============================ 查询 ============================ */
 
@@ -94,6 +98,7 @@ public class InboundOrderServiceImpl implements InboundOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long create(InboundOrderSaveDTO dto) {
+        requireEnabledWarehouse(dto.getWarehouseId());
         // ① 批量取商品，一次查完（循环里单个 get 就是 N+1）
         List<Long> skuIds = dto.getItems().stream()
                 .map(InboundItemDTO::getSkuId)
@@ -175,9 +180,13 @@ public class InboundOrderServiceImpl implements InboundOrderService {
 
         Map<Long, InboundOrderItem> itemMap = itemMapper.selectByOrderId(orderId).stream()
                 .collect(Collectors.toMap(InboundOrderItem::getId, item -> item));
+        Set<Long> seenItemIds = new HashSet<>();
 
         // ③ 先整体校验，任一行不合法就整单失败 —— 这是「整单原子」的关键
         for (ReceiveItemDTO input : dto.getItems()) {
+            if (!seenItemIds.add(input.getItemId())) {
+                throw new BizException(CommonErrorCode.PARAM_INVALID);
+            }
             InboundOrderItem item = itemMap.get(input.getItemId());
             if (item == null) {
                 // 传了别的单据的 itemId，直接拒绝
@@ -196,8 +205,11 @@ public class InboundOrderServiceImpl implements InboundOrderService {
 
         // ④ 校验全过了才落库
         for (ReceiveItemDTO input : dto.getItems()) {
-            itemMapper.receiveItem(input.getItemId(), input.getReceivedQty(),
+            int updated = itemMapper.receiveItem(input.getItemId(), input.getReceivedQty(),
                     input.getBatchNo(), input.getProductionDate(), input.getExpiryDate());
+            if (updated == 0) {
+                throw new BizException(InboundErrorCode.RECEIVED_EXCEED_EXPECT);
+            }
         }
 
         // ⑤ 重算总量并推进状态
@@ -279,6 +291,20 @@ public class InboundOrderServiceImpl implements InboundOrderService {
         BeanUtils.copyProperties(item, vo);
         return vo;
     }
+
+    /** 建单必须引用存在且启用的仓库，不能只靠数据库里的裸 ID。 */
+    private void requireEnabledWarehouse(Long warehouseId) {
+        String status;
+        try {
+            status = warehouseService.get(warehouseId).getStatus();
+        } catch (BizException e) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID);
+        }
+        if (!"ENABLED".equals(status)) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID);
+        }
+    }
+
 
     private String blankToEmpty(String value) {
         return value == null ? "" : value.trim();

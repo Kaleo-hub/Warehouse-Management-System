@@ -48,7 +48,7 @@ const totalQty = computed(() =>
 )
 
 watch(() => app.currentWarehouseId, (id) => {
-  if (id && !form.warehouseId) form.warehouseId = id
+  if (id) form.warehouseId = id
 })
 
 onMounted(async () => {

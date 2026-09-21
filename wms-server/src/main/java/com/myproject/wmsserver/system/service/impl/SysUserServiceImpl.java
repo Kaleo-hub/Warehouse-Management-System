@@ -172,11 +172,18 @@ public class SysUserServiceImpl implements SysUserService {
      * 没有就拒绝 —— 这是防止把系统锁死的关键一条。
      */
     private void ensureAnotherEnabledAdmin(Long excludeId) {
-        Long others = sysUserMapper.selectCount(Wrappers.<SysUser>lambdaQuery()
+        // 锁住当前所有启用的管理员，序列化并发降级/删除操作。
+        // 只 selectCount 不够：两个管理员同时互相降级时，都可能看到「对方还在」。
+        List<SysUser> admins = sysUserMapper.selectList(Wrappers.<SysUser>lambdaQuery()
                 .eq(SysUser::getRole, UserRole.ADMIN.name())
                 .eq(SysUser::getStatus, STATUS_ENABLED)
-                .ne(SysUser::getId, excludeId));
-        if (others == null || others == 0) {
+                .orderByAsc(SysUser::getId)
+                .last("FOR UPDATE"));
+        long others = admins.stream()
+                .filter(admin -> !admin.getId().equals(excludeId))
+                .count();
+
+        if (others == 0) {
             log.warn("拒绝操作：系统里只剩这一个启用的管理员 excludeId={}", excludeId);
             throw new BizException(AuthErrorCode.LAST_ADMIN_PROTECTED);
         }
