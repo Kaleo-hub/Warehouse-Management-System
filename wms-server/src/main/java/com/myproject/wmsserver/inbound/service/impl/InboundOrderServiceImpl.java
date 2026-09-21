@@ -24,6 +24,8 @@ import com.myproject.wmsserver.inbound.vo.InboundOrderItemVO;
 import com.myproject.wmsserver.inbound.vo.InboundOrderVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.myproject.wmsserver.basedata.service.PartnerService;
+import com.myproject.wmsserver.basedata.vo.PartnerVO;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +54,9 @@ public class InboundOrderServiceImpl implements InboundOrderService {
     private final InboundOrderItemMapper itemMapper;
     /** 跨模块只能调对方的 Service，不能注入别人的 Mapper（docs/02 第 2 节） */
     private final ProductService productService;
+
+    /** 往来单位主数据。跨模块只调 Service，不碰别人的 Mapper */
+    private final PartnerService partnerService;
     private final SequenceService sequenceService;
 
     /* ============================ 查询 ============================ */
@@ -114,7 +119,9 @@ public class InboundOrderServiceImpl implements InboundOrderService {
         // 单号由发号器统一生成，不用 MAX()+1，并发下不会重号
         order.setOrderNo(sequenceService.nextNo(BIZ_TYPE, ORDER_NO_PREFIX));
         order.setWarehouseId(dto.getWarehouseId());
-        order.setSupplierName(blankToEmpty(dto.getSupplierName()));
+        // 名称以主数据为准（填了 id 就忽略前端传的文本），没填才退回自由文本
+        order.setSupplierName(resolvePartnerName(dto.getSupplierId(), dto.getSupplierName(), "SUPPLIER"));
+        order.setSupplierId(dto.getSupplierId());
         order.setExpectArriveTime(dto.getExpectArriveTime());
         order.setStatus(InboundStatus.CREATED.name());
         order.setTotalExpectQty(totalExpectQty);
@@ -279,5 +286,28 @@ public class InboundOrderServiceImpl implements InboundOrderService {
 
     private int nz(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    /**
+     * 取「往来单位名称快照」。
+     *
+     * 填了 id 就以主数据为准（名称由后端取，前端传什么都不算数），
+     * 没填就退回自由文本 —— 历史单据和还在用老接口的调用方都还能跑。
+     *
+     * 【为什么校验类型和状态】供应商下拉里混进一个客户、或引用一个已停用的单位，
+     * 单子建出来就再也对不上账了。这类脏数据要在入口挡住，别等对账时才发现。
+     */
+    private String resolvePartnerName(Long partnerId, String fallbackName, String expectType) {
+        if (partnerId == null) {
+            return blankToEmpty(fallbackName);
+        }
+        PartnerVO partner = partnerService.get(partnerId);
+        if (!expectType.equals(partner.getPartnerType()) || !"ENABLED".equals(partner.getStatus())) {
+            log.warn("引用了类型不符或已停用的往来单位 partnerId={} type={} status={}",
+                    partnerId, partner.getPartnerType(), partner.getStatus());
+            throw new BizException(CommonErrorCode.PARAM_INVALID);
+        }
+        // 名称以主数据为准
+        return partner.getName();
     }
 }

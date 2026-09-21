@@ -21,6 +21,9 @@ public class OutboundOrderVO {
     /** 冗余字段，列表直接显示仓库名 */
     private String warehouseName;
 
+    /** 客户 id（历史单据可能为空） */
+    private Long customerId;
+
     private String customerName;
 
     private String receiveAddress;

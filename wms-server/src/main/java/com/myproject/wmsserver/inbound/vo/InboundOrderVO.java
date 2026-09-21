@@ -22,6 +22,9 @@ public class InboundOrderVO {
     /** 冗余字段：列表要显示仓库名，不能让前端拿 id 去反查 */
     private String warehouseName;
 
+    /** 供应商 id（历史单据可能为空） */
+    private Long supplierId;
+
     private String supplierName;
 
     private LocalDateTime expectArriveTime;

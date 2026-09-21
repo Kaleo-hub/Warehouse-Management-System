@@ -32,6 +32,8 @@ import com.myproject.wmsserver.outbound.vo.OutboundOrderItemVO;
 import com.myproject.wmsserver.outbound.vo.OutboundOrderVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.myproject.wmsserver.basedata.service.PartnerService;
+import com.myproject.wmsserver.basedata.vo.PartnerVO;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +63,9 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
     private final OutboundOrderItemMapper itemMapper;
     private final OutboundAllocateMapper allocateMapper;
     private final ProductService productService;
+
+    /** 往来单位主数据。跨模块只调 Service，不碰别人的 Mapper */
+    private final PartnerService partnerService;
     private final SequenceService sequenceService;
     private final InventoryService inventoryService;
 
@@ -111,7 +116,9 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
         OutboundOrder order = new OutboundOrder();
         order.setOrderNo(sequenceService.nextNo(BIZ_TYPE, ORDER_NO_PREFIX));
         order.setWarehouseId(dto.getWarehouseId());
-        order.setCustomerName(blankToEmpty(dto.getCustomerName()));
+        // 名称以主数据为准（填了 id 就忽略前端传的文本），没填才退回自由文本
+        order.setCustomerName(resolvePartnerName(dto.getCustomerId(), dto.getCustomerName(), "CUSTOMER"));
+        order.setCustomerId(dto.getCustomerId());
         order.setReceiveAddress(blankToEmpty(dto.getReceiveAddress()));
         order.setExpectShipTime(dto.getExpectShipTime());
         order.setStatus(OutboundStatus.CREATED.name());
@@ -458,5 +465,28 @@ public class OutboundOrderServiceImpl implements OutboundOrderService {
 
     private int nz(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    /**
+     * 取「往来单位名称快照」。
+     *
+     * 填了 id 就以主数据为准（名称由后端取，前端传什么都不算数），
+     * 没填就退回自由文本 —— 历史单据和还在用老接口的调用方都还能跑。
+     *
+     * 【为什么校验类型和状态】供应商下拉里混进一个客户、或引用一个已停用的单位，
+     * 单子建出来就再也对不上账了。这类脏数据要在入口挡住，别等对账时才发现。
+     */
+    private String resolvePartnerName(Long partnerId, String fallbackName, String expectType) {
+        if (partnerId == null) {
+            return blankToEmpty(fallbackName);
+        }
+        PartnerVO partner = partnerService.get(partnerId);
+        if (!expectType.equals(partner.getPartnerType()) || !"ENABLED".equals(partner.getStatus())) {
+            log.warn("引用了类型不符或已停用的往来单位 partnerId={} type={} status={}",
+                    partnerId, partner.getPartnerType(), partner.getStatus());
+            throw new BizException(CommonErrorCode.PARAM_INVALID);
+        }
+        // 名称以主数据为准
+        return partner.getName();
     }
 }

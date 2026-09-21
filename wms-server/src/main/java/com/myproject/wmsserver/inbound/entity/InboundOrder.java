@@ -21,6 +21,12 @@ public class InboundOrder {
     private Long warehouseId;
 
     /** 供应商名称，快照 */
+    /**
+     * 供应商 id（partner.id）。可以为空：历史单据是在主数据之前建的。
+     * 名称快照 supplierName 始终保留 —— 统计用 id，显示用快照。
+     */
+    private Long supplierId;
+
     private String supplierName;
 
     private LocalDateTime expectArriveTime;

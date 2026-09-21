@@ -20,6 +20,9 @@ public class OutboundOrder {
 
     private Long warehouseId;
 
+    /** 客户 id（partner.id）。同入库单：id 管统计，名称快照管显示 */
+    private Long customerId;
+
     private String customerName;
 
     private String receiveAddress;

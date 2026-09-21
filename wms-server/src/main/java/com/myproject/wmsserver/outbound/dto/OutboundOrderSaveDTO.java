@@ -16,6 +16,9 @@ public class OutboundOrderSaveDTO {
     @NotNull(message = "出库仓库不能为空")
     private Long warehouseId;
 
+    /** 客户 id。填了以主数据为准，不填则退回自由文本 */
+    private Long customerId;
+
     @Size(max = 128, message = "客户名称最长 128 位")
     private String customerName;
 

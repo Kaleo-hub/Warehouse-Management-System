@@ -5,6 +5,7 @@
 
     <select id="selectOrderPage" resultType="com.myproject.wmsserver.outbound.vo.OutboundOrderVO">
         SELECT o.id, o.order_no, o.warehouse_id, w.name AS warehouse_name,
+               o.customer_id,
                o.customer_name, o.receive_address, o.expect_ship_time,
                o.status, o.total_qty, o.allocated_qty, o.picked_qty,
                o.allocate_time, o.remark, o.create_time, o.update_time

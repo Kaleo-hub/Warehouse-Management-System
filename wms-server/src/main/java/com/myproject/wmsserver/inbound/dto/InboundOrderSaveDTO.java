@@ -16,6 +16,12 @@ public class InboundOrderSaveDTO {
     @NotNull(message = "入库仓库不能为空")
     private Long warehouseId;
 
+    /**
+     * 供应商 id。填了就以主数据为准（名称由后端从主数据取快照），
+     * 不填则退回用 supplierName 自由文本 —— 老数据/老脚本还能用。
+     */
+    private Long supplierId;
+
     @Size(max = 128, message = "供应商名称最长 128 位")
     private String supplierName;
 
