@@ -46,6 +46,18 @@ wms:
     # 总开关：本地调试或压测时可以关掉，避免后台悄悄改数据
     timeout-enabled: true
 
+# 作业任务超时（docs/01 6.3 节状态机）
+# 任务建出来就带 deadline，过期后自动标 TIMEOUT 并【只】重新入池一次。
+  task:
+    # 创建任务时给的时限：上架可以慢慢干，拣货在出库环节上要快
+    putaway-deadline-minutes: 120
+    pick-deadline-minutes: 30
+    # 重新入池后给的新时限（和创建时限分开配，避免刚回池又超时）
+    requeue-deadline-minutes: 60
+    timeout-scan-ms: 60000
+    timeout-initial-delay-ms: 30000
+    timeout-enabled: true
+
 # 幂等记录清理
 # 幂等表是只增的，没有清理会无限长。默认 10 分钟扫一次、每次最多删 1 万行。
   idempotent:

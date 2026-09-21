@@ -7,6 +7,8 @@ import com.myproject.wmsserver.task.entity.StockTask;
 import com.myproject.wmsserver.task.vo.StockTaskVO;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
+
 public interface StockTaskMapper extends BaseMapper<StockTask> {
 
     /** 分页查询，带仓库名 / 库位编码 / 商品名 */
@@ -45,6 +47,22 @@ public interface StockTaskMapper extends BaseMapper<StockTask> {
      */
     Long selectRecommendedPutawayLocationId(@Param("warehouseId") Long warehouseId,
                                             @Param("skuId") Long skuId);
+
+    /**
+     * ① 超时打标：过了 deadline 还没做完的任务 → TIMEOUT。
+     *
+     * 为什么先标记再回池，而不是一条 SQL 直接改回 CREATED：
+     * 这是 docs/01 第 6.3 节画的状态机 —— 「超时」和「重新入池」是两个决策，
+     * 中间那个 TIMEOUT 状态是有意义的：它代表「确实超时过」，
+     * 重试次数用完之后就停在这个状态等人处理，不会再被扫回来。
+     */
+    int markTimeout(@Param("now") LocalDateTime now, @Param("limit") int limit);
+
+    /**
+     * ② 重新入池：TIMEOUT 且还没重试过的 → 回到 CREATED，重试次数 +1。
+     * 只给一次机会（retry_count < 1）：反复重试等于把问题藏起来，该让人看见了。
+     */
+    int requeueTimeout(@Param("newDeadline") LocalDateTime newDeadline, @Param("limit") int limit);
 
     /** 取该仓库的收货暂存位（location_type = 'TEMP'），作为上架任务的源库位 */
     Long selectTempLocationId(@Param("warehouseId") Long warehouseId);

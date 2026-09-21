@@ -32,10 +32,12 @@ import com.myproject.wmsserver.task.service.StockTaskService;
 import com.myproject.wmsserver.task.vo.StockTaskVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -62,6 +64,19 @@ public class StockTaskServiceImpl implements StockTaskService {
     private final InventoryService inventoryService;
     private final LocationService locationService;
     private final SequenceService sequenceService;
+
+    /**
+     * 任务默认的完成时限（分钟）。
+     *
+     * 【为什么要给任务设 deadline】原来这张表的 deadline 字段一直是 NULL ——
+     * 字段建了、索引也建了，就是没人写值，于是「任务超时」这条规则根本无从触发。
+     * 现在按任务类型给不同时限：上架可以慢慢干（2 小时），拣货是出库环节（30 分钟）。
+     */
+    @Value("${wms.task.putaway-deadline-minutes:120}")
+    private int putawayDeadlineMinutes;
+
+    @Value("${wms.task.pick-deadline-minutes:30}")
+    private int pickDeadlineMinutes;
 
     /* ============================ 查询 ============================ */
 
@@ -133,6 +148,8 @@ public class StockTaskServiceImpl implements StockTaskService {
             task.setPriority(0);
             task.setSkuId(item.getSkuId());
             task.setBatchNo(item.getBatchNo() == null ? "" : item.getBatchNo());
+            // 截止时间：超时未完成会被定时任务标成 TIMEOUT 并（只）重新入池一次
+            task.setDeadline(LocalDateTime.now().plusMinutes(Math.max(1, putawayDeadlineMinutes)));
             task.setFromLocationId(fromLocationId);
             task.setToLocationId(toLocationId);
             task.setPlanQty(pending);
@@ -201,6 +218,7 @@ public class StockTaskServiceImpl implements StockTaskService {
             task.setSourceItemId(allocate.getId());
             task.setStatus(TaskStatus.CREATED.name());
             task.setPriority(0);
+            task.setDeadline(LocalDateTime.now().plusMinutes(Math.max(1, pickDeadlineMinutes)));
             task.setSkuId(allocate.getSkuId());
             task.setBatchNo(allocate.getBatchNo() == null ? "" : allocate.getBatchNo());
             task.setFromLocationId(allocate.getLocationId());

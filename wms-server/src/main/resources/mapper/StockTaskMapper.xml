@@ -141,6 +141,41 @@
       status in (...) 而不是 != 'DONE'：只作废「还没干完」的，
       已经完成的任务不能因为单据超时被改成 CANCELLED —— 那是抹掉别人干过的活。
     -->
+    <!--
+      超时打标。只处理「还没结束」的任务（DONE/CANCELLED/EXCEPTION 不动）。
+      走 idx_deadline(status, deadline)：等值列 status 在前，范围列 deadline 在后。
+    -->
+    <update id="markTimeout">
+        UPDATE stock_task
+        SET status = 'TIMEOUT',
+            remark = CONCAT(LEFT(IFNULL(remark, ''), 200), ' [系统]超过截止时间自动标记超时')
+        WHERE status IN ('CREATED', 'ASSIGNED', 'PROCESSING')
+          AND deadline IS NOT NULL
+          AND deadline &lt; #{now}
+          AND deleted = 0
+        LIMIT #{limit}
+    </update>
+
+    <!--
+      重新入池：把 TIMEOUT 且还没重试过的任务放回任务池。
+      领取人、开始时间都要清掉 —— 它已经不是那个人的活了；
+      deadline 顺延一个新的窗口，否则下一轮扫描立刻又会把它标成超时。
+    -->
+    <update id="requeueTimeout">
+        UPDATE stock_task
+        SET status        = 'CREATED',
+            retry_count   = retry_count + 1,
+            assignee_id   = NULL,
+            assignee_name = NULL,
+            start_time    = NULL,
+            deadline      = #{newDeadline},
+            remark        = CONCAT(LEFT(IFNULL(remark, ''), 200), ' [系统]已重新入池（最后一次机会）')
+        WHERE status = 'TIMEOUT'
+          AND retry_count &lt; 1
+          AND deleted = 0
+        LIMIT #{limit}
+    </update>
+
     <update id="cancelUnfinishedTasks">
         UPDATE stock_task
         SET status      = 'CANCELLED',
