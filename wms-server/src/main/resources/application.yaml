@@ -69,6 +69,12 @@ wms:
     lease-seconds: 30
     # 兜底：处理中超过这么多分钟还没销登记，直接标成失败（让同 key 的请求可以重试）
     stale-processing-minutes: 60
+  # 定时任务调度线程池
+  scheduler:
+    # 三个 Job 全是 fixedDelay（不会重入自己），并发度上限就是 Job 数量，
+    # 给 5 是留两个余量给以后新增的 Job。配大了纯属浪费。
+    pool-size: 5
+
 
 # 日志配置
 logging:
